@@ -8,7 +8,7 @@
 :root{--bg:#08090c;--panel:#0d0e14;--border:#16192a;--accent:#e8580a;--text:#d0d4e8;--muted:#353a55;--dim:#12141f}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:13px}
 #app{display:grid;grid-template-rows:42px 1fr;height:100%}
-#hdr{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:12px}
+#hdr{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:12px;flex-shrink:0}
 .logo{font-size:13px;font-weight:700;color:var(--accent);letter-spacing:.1em;display:flex;align-items:center;gap:7px;flex-shrink:0}
 .sep{width:1px;height:18px;background:var(--border);flex-shrink:0}
 .pill{padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.06em;flex-shrink:0}
@@ -20,6 +20,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .hbtn{padding:4px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;transition:border-color .15s,color .15s}
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
 .hbtn.hi{border-color:var(--accent);color:var(--accent)}
+
+#warmup-bar{display:none;padding:5px 16px;background:#0d0e14;border-bottom:1px solid var(--border);align-items:center;gap:12px;flex-shrink:0}
+#warmup-bar.show{display:flex}
+#wu-label{font-size:11px;color:#fbbf24;white-space:nowrap;min-width:180px}
+#wu-track{flex:1;height:4px;background:#16192a;border-radius:2px;overflow:hidden}
+#wu-fill{height:100%;border-radius:2px;background:#fbbf24;transition:width .9s linear}
+#wu-time{font-size:11px;font-family:monospace;color:#fbbf24;min-width:36px;text-align:right}
+
 #banner{display:none;padding:3px 14px;font-size:11px;font-weight:700;text-align:center;letter-spacing:.05em;flex-shrink:0}
 #body{display:grid;grid-template-columns:1fr 188px;gap:1px;background:var(--border);overflow:hidden}
 .pane{background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
@@ -46,11 +54,29 @@ canvas#cvM:active{cursor:grabbing}
 .s-n{background:#071a0d;color:#4ade80;border:1px solid #163d20}
 .s-c{background:#1a1000;color:#fb923c;border:1px solid #3d2500}
 .s-d{background:#1a0505;color:#f87171;border:1px solid #3d1010}
+.s-w{background:#1a1400;color:#fbbf24;border:1px solid #3a2a00}
 .stat-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)}
 .stat-row:last-child{border:none}
 .sk{font-size:10px;color:var(--muted)}.sv{font-size:10px;font-family:monospace;color:var(--text)}
 .clrbtn{width:100%;padding:5px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;transition:all .15s}
 .clrbtn:hover{border-color:#f87171;color:#f87171}
+
+#cal-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.75);z-index:100;align-items:center;justify-content:center}
+#cal-overlay.open{display:flex}
+#cal-box{background:#0d0e14;border:1px solid #1e2238;border-radius:8px;padding:22px 24px;width:330px;display:flex;flex-direction:column;gap:14px}
+#cal-box h2{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.05em}
+#cal-box p{font-size:11px;color:#4a5070;line-height:1.7}
+.cal-row{display:flex;flex-direction:column;gap:4px}
+.cal-row label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.cal-row input{background:#08090c;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-family:monospace;padding:6px 8px;width:100%;outline:none}
+.cal-row input:focus{border-color:var(--accent)}
+.cal-live{font-size:10px;font-family:monospace;color:var(--muted);background:#08090c;border:1px solid var(--border);border-radius:4px;padding:8px 10px;line-height:2}
+.cal-live b{color:#4ade80}
+.cal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
+.cal-btns button{padding:5px 14px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s}
+.cal-btns button:hover{border-color:var(--accent);color:var(--accent)}
+.cal-btns button.primary{border-color:var(--accent);color:var(--accent)}
+.cal-btns button.primary:hover{background:var(--accent);color:#08090c}
 </style>
 </head>
 <body>
@@ -70,12 +96,41 @@ canvas#cvM:active{cursor:grabbing}
   <div class="hstat">Scans <b id="h-sc">0</b></div>
   <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div id="sp"></div>
-  <button class="hbtn hi" id="btnC" onclick="doConnect()">Connect Serial</button>
+  <button class="hbtn hi" onclick="doConnect()">Connect Serial</button>
   <button class="hbtn" onclick="doDisconnect()">Disconnect</button>
   <button class="hbtn" onclick="clearAll()">Clear</button>
   <button class="hbtn" onclick="resetView()">Reset view</button>
+  <button class="hbtn" onclick="openCal()">Calibrate gas</button>
 </div>
+
+<div id="warmup-bar">
+  <span id="wu-label">Sensor warming up…</span>
+  <div id="wu-track"><div id="wu-fill" style="width:0%"></div></div>
+  <span id="wu-time">3:00</span>
+</div>
+
 <div id="banner"></div>
+
+<div id="cal-overlay">
+  <div id="cal-box">
+    <h2>Gas sensor calibration</h2>
+    <p>Place the sensor in clean ambient air. Set R0 to the current Rs values below, which represent the sensor's baseline resistance in a normal room. Hit "Use current Rs" then Save.</p>
+    <div class="cal-live">
+      CO Rs &nbsp;&nbsp; <b id="cl-co">—</b> Ω<br>
+      NO₂ Rs &nbsp;<b id="cl-no2">—</b> Ω<br>
+      NH₃ Rs &nbsp;<b id="cl-nh3">—</b> Ω
+    </div>
+    <div class="cal-row"><label>R0 CO (Ω)</label><input id="r0-co" type="number" min="1"></div>
+    <div class="cal-row"><label>R0 NO₂ (Ω)</label><input id="r0-no2" type="number" min="1"></div>
+    <div class="cal-row"><label>R0 NH₃ (Ω)</label><input id="r0-nh3" type="number" min="1"></div>
+    <div class="cal-btns">
+      <button onclick="useCurrentRs()">Use current Rs</button>
+      <button onclick="closeCal()">Cancel</button>
+      <button class="primary" onclick="saveCal()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div id="body">
   <div class="pane">
     <div class="ptitle">Smart map<em id="m-info">scroll=zoom · drag=pan</em></div>
@@ -93,19 +148,19 @@ canvas#cvM:active{cursor:grabbing}
         <div class="gc-lbl">CO</div>
         <div class="gc-val" id="co-v">—<span class="gc-unit">ppm</span></div>
         <div class="gbar"><div class="gbf" id="co-f" style="width:0%"></div></div>
-        <div class="gst s-n" id="co-s">Normal</div>
+        <div class="gst s-w" id="co-s">Warming up</div>
       </div>
       <div class="gcard">
         <div class="gc-lbl">NO₂</div>
         <div class="gc-val" id="no2-v">—<span class="gc-unit">ppm</span></div>
         <div class="gbar"><div class="gbf" id="no2-f" style="width:0%"></div></div>
-        <div class="gst s-n" id="no2-s">Normal</div>
+        <div class="gst s-w" id="no2-s">Warming up</div>
       </div>
       <div class="gcard">
         <div class="gc-lbl">NH₃</div>
         <div class="gc-val" id="nh3-v">—<span class="gc-unit">ppm</span></div>
         <div class="gbar"><div class="gbf" id="nh3-f" style="width:0%"></div></div>
-        <div class="gst s-n" id="nh3-s">Normal</div>
+        <div class="gst s-w" id="nh3-s">Warming up</div>
       </div>
     </div>
     <div class="sc">
@@ -117,16 +172,16 @@ canvas#cvM:active{cursor:grabbing}
   </div>
 </div>
 </div>
+
 <script>
 const cvM=document.getElementById('cvM'), ctxM=cvM.getContext('2d');
 
 // ── Occupancy grid ────────────────────────────────────────────────────────────
 const GRES=30, GSIZ=600, ORIG=GSIZ/2;
 const grid=new Float32Array(GSIZ*GSIZ);
-const WALL_HIT=5, WALL_MISS=-1, WALL_MAX=60, WALL_MIN=-40;
+const WALL_HIT=5, WALL_MISS=-1, WALL_MAX=60;
 let mapScans=0, scanPts=[];
 
-// Offscreen wall canvas — only redrawn when grid changes
 const wallCanvas=document.createElement('canvas');
 wallCanvas.width=GSIZ; wallCanvas.height=GSIZ;
 const wctx=wallCanvas.getContext('2d');
@@ -151,14 +206,14 @@ function updateGrid(ang,dist){
     if(x===gex&&y===gey) break;
     if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){
       const i=y*GSIZ+x;
-      grid[i]=Math.max(WALL_MIN,grid[i]+WALL_MISS);
+      grid[i]=Math.max(-40, grid[i]+WALL_MISS);
     }
     const e2=2*err;
     if(e2>-dy){err-=dy;x+=sx;}
     if(e2<dx){err+=dx;y+=sy;}
   }
   if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ)
-    grid[gey*GSIZ+gex]=Math.min(WALL_MAX,grid[gey*GSIZ+gex]+WALL_HIT);
+    grid[gey*GSIZ+gex]=Math.min(WALL_MAX, grid[gey*GSIZ+gex]+WALL_HIT);
 }
 
 function rebuildWallCanvas(){
@@ -179,7 +234,7 @@ function rebuildWallCanvas(){
   wallDirty=false;
 }
 
-// ── Canvas resize ─────────────────────────────────────────────────────────────
+// ── Canvas / view ─────────────────────────────────────────────────────────────
 function resizeAll(){
   const p=cvM.parentElement;
   cvM.width=p.clientWidth; cvM.height=p.clientHeight-28;
@@ -187,7 +242,6 @@ function resizeAll(){
 window.addEventListener('resize',resizeAll);
 setTimeout(resizeAll,40);
 
-// ── View ──────────────────────────────────────────────────────────────────────
 const v={x:0,y:0,sc:1};
 function resetView(){v.x=cvM.width/2; v.y=cvM.height/2; v.sc=1;}
 setTimeout(resetView,60);
@@ -231,7 +285,7 @@ function drawMap(){
     ctxM.fillText(Math.round(m*3.281)+'ft',v.x+r+4,v.y+4);
   }
 
-  // Free-space polygon (current scan, filled from robot)
+  // Free-space polygon
   if(scanPts.length>2){
     const sorted=[...scanPts].sort((a,b)=>a[0]-b[0]);
     ctxM.beginPath(); ctxM.moveTo(v.x,v.y);
@@ -241,10 +295,10 @@ function drawMap(){
     }
     ctxM.closePath();
     ctxM.fillStyle='rgba(30,80,160,0.13)'; ctxM.fill();
-    ctxM.strokeStyle='rgba(50,110,220,0.2)'; ctxM.lineWidth=1; ctxM.stroke();
+    ctxM.strokeStyle='rgba(50,110,220,0.18)'; ctxM.lineWidth=1; ctxM.stroke();
   }
 
-  // Wall canvas blit
+  // Wall canvas
   if(wallDirty) rebuildWallCanvas();
   ctxM.save();
   ctxM.translate(v.x-ORIG*v.sc, v.y-ORIG*v.sc);
@@ -253,7 +307,7 @@ function drawMap(){
   ctxM.drawImage(wallCanvas,0,0);
   ctxM.restore();
 
-  // Direction arrow at 0°
+  // 0° direction line
   const dirLen=60*v.sc+40;
   ctxM.strokeStyle='rgba(232,88,10,0.55)'; ctxM.lineWidth=1.5; ctxM.setLineDash([4,5]);
   ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(v.x,v.y-dirLen); ctxM.stroke();
@@ -299,7 +353,6 @@ function drawMap(){
   document.getElementById('m-info').textContent=mapScans+' scans · scroll=zoom · drag=pan';
 }
 
-// ── rAF loop ──────────────────────────────────────────────────────────────────
 let fpsCnt=0, fpsLast=performance.now();
 function loop(){
   drawMap();
@@ -313,31 +366,77 @@ function loop(){
 }
 requestAnimationFrame(loop);
 
-// ── Gas ───────────────────────────────────────────────────────────────────────
-const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
-let gasMax={co:1,no2:.01,nh3:1};
-let lastGas=[null,null,null];
+// ── Warmup timer ──────────────────────────────────────────────────────────────
+let wuTotal=180;
+function showWarmup(total){
+  wuTotal=total;
+  document.getElementById('warmup-bar').classList.add('show');
+}
+function tickWarmup(remaining){
+  const pct=((wuTotal-remaining)/wuTotal*100).toFixed(1);
+  document.getElementById('wu-fill').style.width=pct+'%';
+  const m=Math.floor(remaining/60), s=remaining%60;
+  document.getElementById('wu-time').textContent=m+':'+(s<10?'0':'')+s;
+  document.getElementById('wu-label').textContent='Sensor warming up…';
+}
+function finishWarmup(){
+  document.getElementById('wu-fill').style.width='100%';
+  document.getElementById('wu-label').textContent='Calibrating…';
+}
+function hideWarmup(){
+  document.getElementById('warmup-bar').classList.remove('show');
+}
 
-function setGasStatus(state){
-  const lbl=state==='warming'?'Warming up…':'Calibrated';
-  const cls=state==='warming'?'s-c':'s-n';
+// ── Calibration modal ─────────────────────────────────────────────────────────
+let calR0={co:51234,no2:49650,nh3:52871};
+let liveRs={co:null,no2:null,nh3:null};
+try{const s=localStorage.getItem('prom_r0');if(s)calR0={...calR0,...JSON.parse(s)};}catch(e){}
+
+function openCal(){
+  document.getElementById('r0-co').value=Math.round(calR0.co);
+  document.getElementById('r0-no2').value=Math.round(calR0.no2);
+  document.getElementById('r0-nh3').value=Math.round(calR0.nh3);
+  updateCalLive();
+  document.getElementById('cal-overlay').classList.add('open');
+}
+function closeCal(){document.getElementById('cal-overlay').classList.remove('open');}
+function updateCalLive(){
+  const fmt=v=>v!=null?Math.round(v).toLocaleString():'—';
+  document.getElementById('cl-co').textContent=fmt(liveRs.co);
+  document.getElementById('cl-no2').textContent=fmt(liveRs.no2);
+  document.getElementById('cl-nh3').textContent=fmt(liveRs.nh3);
+}
+function useCurrentRs(){
+  if(liveRs.co) document.getElementById('r0-co').value=Math.round(liveRs.co);
+  if(liveRs.no2) document.getElementById('r0-no2').value=Math.round(liveRs.no2);
+  if(liveRs.nh3) document.getElementById('r0-nh3').value=Math.round(liveRs.nh3);
+}
+function saveCal(){
+  const co=parseFloat(document.getElementById('r0-co').value);
+  const no2=parseFloat(document.getElementById('r0-no2').value);
+  const nh3=parseFloat(document.getElementById('r0-nh3').value);
+  if([co,no2,nh3].some(v=>isNaN(v)||v<=0)){alert('Enter valid positive values for all three.');return;}
+  calR0={co,no2,nh3};
+  try{localStorage.setItem('prom_r0',JSON.stringify(calR0));}catch(e){}
+  closeCal();
+}
+
+// ── Gas display ───────────────────────────────────────────────────────────────
+const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
+let gasMax={co:1,no2:.01,nh3:1}, lastGas=[null,null,null];
+
+function setAllGasStatus(cls,lbl){
   ['co','no2','nh3'].forEach(g=>{
-    const el=document.getElementById(g+'-s');
-    el.className='gst '+cls; el.textContent=lbl;
-    if(state==='warming'){
-      document.getElementById(g+'-v').innerHTML='—<span class="gc-unit">ppm</span>';
-      document.getElementById(g+'-f').style.width='0%';
-    }
+    document.getElementById(g+'-s').className='gst '+cls;
+    document.getElementById(g+'-s').textContent=lbl;
   });
 }
 
 function glv(val,k){return val>=THR[k].d?'danger':val>=THR[k].c?'caution':'normal';}
 
 function updateGas(co,no2,nh3){
-  // Reject unchanged readings (sensor frozen / not ready)
   if(lastGas[0]===co&&lastGas[1]===no2&&lastGas[2]===nh3) return;
   lastGas=[co,no2,nh3];
-
   gasMax.co=Math.max(gasMax.co,co*1.1+.5);
   gasMax.no2=Math.max(gasMax.no2,no2*1.1+.005);
   gasMax.nh3=Math.max(gasMax.nh3,nh3*1.1+.5);
@@ -352,8 +451,8 @@ function updateGas(co,no2,nh3){
   const lbl={normal:'Normal',caution:'Caution',danger:'Danger'};
   const cls={normal:'s-n',caution:'s-c',danger:'s-d'};
   for(const[g,l] of Object.entries(lv)){
-    const el=document.getElementById(g+'-s');
-    el.className='gst '+cls[l]; el.textContent=lbl[l];
+    document.getElementById(g+'-s').className='gst '+cls[l];
+    document.getElementById(g+'-s').textContent=lbl[l];
   }
   const worst=Object.values(lv).includes('danger')?'danger':Object.values(lv).includes('caution')?'caution':'normal';
   const ban=document.getElementById('banner');
@@ -378,15 +477,27 @@ function parseLine(line){
     if(pts.length){
       scanPts=pts;
       for(const[a,d] of pts) updateGrid(a,d);
-      mapScans++;
-      wallDirty=true;
+      mapScans++; wallDirty=true;
     }
   } else if(line.startsWith('G:')){
     const val=line.slice(2);
-    if(val==='warmup'){
-      setGasStatus('warming');
-    } else if(val==='ready'){
-      setGasStatus('ready');
+    if(val.startsWith('warmup,')){
+      const total=parseInt(val.split(',')[1])||180;
+      showWarmup(total);
+      setAllGasStatus('s-w','Warming up');
+    } else if(val.startsWith('countdown,')){
+      tickWarmup(parseInt(val.split(',')[1])||0);
+    } else if(val==='calibrating'){
+      finishWarmup();
+      setAllGasStatus('s-w','Calibrating');
+    } else if(val.startsWith('ready,')){
+      hideWarmup();
+      const[,co,no2,nh3]=val.split(',');
+      calR0={co:parseFloat(co)||calR0.co, no2:parseFloat(no2)||calR0.no2, nh3:parseFloat(nh3)||calR0.nh3};
+      setAllGasStatus('s-n','Ready');
+    } else if(val.startsWith('RS:')){
+      const[co,no2,nh3]=val.slice(3).split(',').map(Number);
+      if(!isNaN(co)){liveRs={co,no2,nh3}; updateCalLive();}
     } else {
       const[co,no2,nh3]=val.split(',').map(Number);
       if(!isNaN(co)) updateGas(co,no2,nh3);
@@ -394,38 +505,31 @@ function parseLine(line){
   }
 }
 
-// ── WebSerial — auto-reconnect ────────────────────────────────────────────────
+// ── WebSerial ─────────────────────────────────────────────────────────────────
 let port=null, running=false, reconnectTimer=null;
 
 function setStatus(state){
   const b=document.getElementById('badge');
-  const c=document.getElementById('btnC');
-  if(state==='live'){b.textContent='LIVE';b.className='pill p-live';c.textContent='Connect Serial';}
-  else if(state==='wait'){b.textContent='RECONNECTING';b.className='pill p-wait';c.textContent='Connect Serial';}
-  else{b.textContent='OFFLINE';b.className='pill p-off';c.textContent='Connect Serial';}
+  if(state==='live'){b.textContent='LIVE';b.className='pill p-live';}
+  else if(state==='wait'){b.textContent='RECONNECTING';b.className='pill p-wait';}
+  else{b.textContent='OFFLINE';b.className='pill p-off';}
 }
-
 async function doConnect(){
   if(!('serial' in navigator)){alert('Use Chrome or Edge.');return;}
   clearTimeout(reconnectTimer);
-  if(port){await doDisconnect();}
+  if(port) await doDisconnect();
   try{
     port=await navigator.serial.requestPort();
     await port.open({baudRate:115200});
     running=true; setStatus('live'); readLoop();
-  }catch(e){
-    port=null;
-    if(e.name!=='NotFoundError') alert('Failed: '+e.message);
-  }
+  }catch(e){port=null;if(e.name!=='NotFoundError')alert('Failed: '+e.message);}
 }
-
 async function doDisconnect(){
   running=false; clearTimeout(reconnectTimer);
   try{await port?.readable?.cancel();}catch{}
   try{await port?.close();}catch{}
   port=null; setStatus('offline');
 }
-
 async function readLoop(){
   const dec=new TextDecoder(); let buf='';
   const reader=port.readable.getReader();
@@ -439,32 +543,23 @@ async function readLoop(){
       for(const raw of block.split('\n')){const l=raw.trim();if(l)parseLine(l);}
       if(buf.length>16000) buf='';
     }
-  }catch(e){
-    if(running) console.warn('Serial read error:',e.message);
-  }finally{
+  }catch(e){if(running)console.warn(e.message);}
+  finally{
     reader.releaseLock();
     try{await port?.close();}catch{}
     port=null;
-    if(running){
-      setStatus('wait');
-      reconnectTimer=setTimeout(tryReconnect,2000);
-    } else {
-      setStatus('offline');
-    }
+    if(running){setStatus('wait');reconnectTimer=setTimeout(tryReconnect,2000);}
+    else setStatus('offline');
   }
 }
-
 async function tryReconnect(){
   if(!running) return;
   try{
     const ports=await navigator.serial.getPorts();
     if(!ports.length){reconnectTimer=setTimeout(tryReconnect,2000);return;}
-    port=ports[0];
-    await port.open({baudRate:115200});
+    port=ports[0]; await port.open({baudRate:115200});
     setStatus('live'); readLoop();
-  }catch(e){
-    reconnectTimer=setTimeout(tryReconnect,2000);
-  }
+  }catch(e){reconnectTimer=setTimeout(tryReconnect,2000);}
 }
 </script>
 </body>
