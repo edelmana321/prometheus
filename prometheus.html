@@ -14,9 +14,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .pill{padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.06em;flex-shrink:0}
 .p-off{background:#0d0e14;color:var(--muted);border:1px solid var(--border)}
 .p-live{background:#071a0d;color:#4ade80;border:1px solid #163d20}
+.p-wait{background:#1a1200;color:#fbbf24;border:1px solid #3a2a00}
 .hstat{font-size:11px;color:var(--muted);white-space:nowrap}.hstat b{color:var(--text);font-weight:600}
 #sp{flex:1}
-.hbtn{padding:4px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;letter-spacing:.02em;transition:border-color .15s,color .15s}
+.hbtn{padding:4px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;transition:border-color .15s,color .15s}
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
 .hbtn.hi{border-color:var(--accent);color:var(--accent)}
 #banner{display:none;padding:3px 14px;font-size:11px;font-weight:700;text-align:center;letter-spacing:.05em;flex-shrink:0}
@@ -69,7 +70,7 @@ canvas#cvM:active{cursor:grabbing}
   <div class="hstat">Scans <b id="h-sc">0</b></div>
   <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div id="sp"></div>
-  <button class="hbtn hi" onclick="doConnect()">Connect Serial</button>
+  <button class="hbtn hi" id="btnC" onclick="doConnect()">Connect Serial</button>
   <button class="hbtn" onclick="doDisconnect()">Disconnect</button>
   <button class="hbtn" onclick="clearAll()">Clear</button>
   <button class="hbtn" onclick="resetView()">Reset view</button>
@@ -77,13 +78,13 @@ canvas#cvM:active{cursor:grabbing}
 <div id="banner"></div>
 <div id="body">
   <div class="pane">
-    <div class="ptitle">Smart map<em id="m-info">scroll = zoom · drag = pan</em></div>
+    <div class="ptitle">Smart map<em id="m-info">scroll=zoom · drag=pan</em></div>
     <canvas id="cvM"></canvas>
   </div>
   <div id="sb">
     <div class="sc">
       <div class="sc-lbl">Nearest obstacle</div>
-      <div class="big" id="s-near">—<span class="unit">cm</span></div>
+      <div class="big" id="s-near">—<span class="unit">ft</span></div>
       <div class="sub" id="s-near-dir">—</div>
     </div>
     <div class="sc">
@@ -110,7 +111,6 @@ canvas#cvM:active{cursor:grabbing}
     <div class="sc">
       <div class="sc-lbl">Stats</div>
       <div class="stat-row"><span class="sk">Scans</span><span class="sv" id="st-sc">0</span></div>
-      <div class="stat-row"><span class="sk">Walls</span><span class="sv" id="st-walls">0</span></div>
       <div class="stat-row"><span class="sk">Zoom</span><span class="sv" id="st-mz">—</span></div>
       <button class="clrbtn" onclick="clearAll()">Clear map</button>
     </div>
@@ -123,14 +123,20 @@ const cvM=document.getElementById('cvM'), ctxM=cvM.getContext('2d');
 // ── Occupancy grid ────────────────────────────────────────────────────────────
 const GRES=30, GSIZ=600, ORIG=GSIZ/2;
 const grid=new Float32Array(GSIZ*GSIZ);
-const WALL_HIT=4, WALL_MISS=-0.8, WALL_MAX=60, WALL_MIN=-30;
-let mapScans=0, scanPts=[], wallCount=0;
+const WALL_HIT=5, WALL_MISS=-1, WALL_MAX=60, WALL_MIN=-40;
+let mapScans=0, scanPts=[];
+
+// Offscreen wall canvas — only redrawn when grid changes
+const wallCanvas=document.createElement('canvas');
+wallCanvas.width=GSIZ; wallCanvas.height=GSIZ;
+const wctx=wallCanvas.getContext('2d');
+let wallDirty=false;
 
 function clearAll(){
-  grid.fill(0); mapScans=0; scanPts=[]; wallCount=0;
+  grid.fill(0); mapScans=0; scanPts=[];
+  wctx.clearRect(0,0,GSIZ,GSIZ); wallDirty=false;
   document.getElementById('st-sc').textContent='0';
   document.getElementById('h-sc').textContent='0';
-  document.getElementById('st-walls').textContent='0';
 }
 
 function updateGrid(ang,dist){
@@ -145,50 +151,38 @@ function updateGrid(ang,dist){
     if(x===gex&&y===gey) break;
     if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){
       const i=y*GSIZ+x;
-      grid[i]=Math.max(WALL_MIN, grid[i]+WALL_MISS);
+      grid[i]=Math.max(WALL_MIN,grid[i]+WALL_MISS);
     }
     const e2=2*err;
     if(e2>-dy){err-=dy;x+=sx;}
     if(e2<dx){err+=dx;y+=sy;}
   }
-  if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ){
-    const i=gey*GSIZ+gex;
-    const wasWall=grid[i]>=10;
-    grid[i]=Math.min(WALL_MAX, grid[i]+WALL_HIT);
-    if(!wasWall&&grid[i]>=10) wallCount++;
-  }
+  if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ)
+    grid[gey*GSIZ+gex]=Math.min(WALL_MAX,grid[gey*GSIZ+gex]+WALL_HIT);
 }
 
-// ── Offscreen grid canvas ─────────────────────────────────────────────────────
-const offscreen=document.createElement('canvas');
-const octx=offscreen.getContext('2d');
-let gridDirty=false;
-
-function rebuildGridCanvas(){
-  offscreen.width=GSIZ; offscreen.height=GSIZ;
-  const img=octx.createImageData(GSIZ,GSIZ), d=img.data;
-  for(let i=0;i<d.length;i+=4){d[i]=8;d[i+1]=9;d[i+2]=12;d[i+3]=255;}
+function rebuildWallCanvas(){
+  const img=wctx.createImageData(GSIZ,GSIZ), d=img.data;
   for(let gy=1;gy<GSIZ-1;gy++){
     for(let gx=1;gx<GSIZ-1;gx++){
       const val=grid[gy*GSIZ+gx];
-      if(val<=0) continue;
-      const adj=[grid[(gy-1)*GSIZ+gx],grid[(gy+1)*GSIZ+gx],grid[gy*GSIZ+gx-1],grid[gy*GSIZ+gx+1]];
-      if(!adj.some(a=>a<10)) continue;
+      if(val<8) continue;
       const t=Math.min(1,val/WALL_MAX);
       const i=(gy*GSIZ+gx)*4;
-      d[i]=20+Math.round(t*200); d[i+1]=Math.round(160+t*80); d[i+2]=Math.round(200+t*55);
-      d[i+3]=Math.round((0.55+t*0.45)*255);
+      d[i]  =Math.round(20+t*30);
+      d[i+1]=Math.round(140+t*100);
+      d[i+2]=Math.round(210+t*45);
+      d[i+3]=Math.round(180+t*75);
     }
   }
-  octx.putImageData(img,0,0);
-  gridDirty=false;
+  wctx.putImageData(img,0,0);
+  wallDirty=false;
 }
 
 // ── Canvas resize ─────────────────────────────────────────────────────────────
 function resizeAll(){
   const p=cvM.parentElement;
-  cvM.width=p.clientWidth;
-  cvM.height=p.clientHeight-28;
+  cvM.width=p.clientWidth; cvM.height=p.clientHeight-28;
 }
 window.addEventListener('resize',resizeAll);
 setTimeout(resizeAll,40);
@@ -202,8 +196,8 @@ let drag=false,dsx=0,dsy=0,dox=0,doy=0;
 cvM.addEventListener('wheel',e=>{
   e.preventDefault();
   const f=e.deltaY<0?1.12:.89;
-  const rect=cvM.getBoundingClientRect();
-  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const r=cvM.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
   v.x=mx+(v.x-mx)*f; v.y=my+(v.y-my)*f;
   v.sc=Math.max(.05,Math.min(25,v.sc*f));
 },{passive:false});
@@ -212,92 +206,86 @@ window.addEventListener('mousemove',e=>{if(!drag)return;v.x=dox+(e.clientX-dsx);
 window.addEventListener('mouseup',()=>drag=false);
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
-
 function drawMap(){
   const W=cvM.width, H=cvM.height; if(!W||!H) return;
   ctxM.fillStyle='#08090c'; ctxM.fillRect(0,0,W,H);
 
-  // Subtle grid
-  const gridStep=Math.round(1000/GRES)*v.sc;
-  if(gridStep>12){
-    ctxM.strokeStyle='rgba(255,255,255,0.022)'; ctxM.lineWidth=1;
-    const ox=(v.x%(gridStep)), oy=(v.y%(gridStep));
-    for(let x=ox;x<W;x+=gridStep){ctxM.beginPath();ctxM.moveTo(x,0);ctxM.lineTo(x,H);ctxM.stroke();}
-    for(let y=oy;y<H;y+=gridStep){ctxM.beginPath();ctxM.moveTo(0,y);ctxM.lineTo(W,y);ctxM.stroke();}
+  // Grid lines
+  const gStep=Math.round(1000/GRES)*v.sc;
+  if(gStep>14){
+    ctxM.strokeStyle='rgba(255,255,255,0.025)'; ctxM.lineWidth=1;
+    const ox=((v.x-ORIG*v.sc)%gStep+gStep)%gStep;
+    const oy=((v.y-ORIG*v.sc)%gStep+gStep)%gStep;
+    for(let x=ox;x<W;x+=gStep){ctxM.beginPath();ctxM.moveTo(x,0);ctxM.lineTo(x,H);ctxM.stroke();}
+    for(let y=oy;y<H;y+=gStep){ctxM.beginPath();ctxM.moveTo(0,y);ctxM.lineTo(W,y);ctxM.stroke();}
   }
 
-  // Scale ring labels
-  ctxM.font='9px monospace'; ctxM.textAlign='left'; ctxM.fillStyle='#252a40';
-  for(let m=1;m<=8;m++){
+  // Range rings
+  ctxM.font='9px monospace'; ctxM.textAlign='left';
+  for(let m=1;m<=10;m++){
     const r=m*1000/GRES*v.sc;
-    ctxM.strokeStyle='rgba(255,255,255,0.035)'; ctxM.lineWidth=1;
+    if(r<20||r>Math.max(W,H)) continue;
+    ctxM.strokeStyle='rgba(255,255,255,0.04)'; ctxM.lineWidth=1;
     ctxM.beginPath(); ctxM.arc(v.x,v.y,r,0,Math.PI*2); ctxM.stroke();
-    if(r>30) ctxM.fillText(Math.round(m*3.281)+'ft',v.x+4,v.y-r+9);
+    ctxM.fillStyle='#2a3050';
+    ctxM.fillText(Math.round(m*3.281)+'ft',v.x+r+4,v.y+4);
   }
 
-  // Free space — filled polygon from sorted scan points back to robot
+  // Free-space polygon (current scan, filled from robot)
   if(scanPts.length>2){
     const sorted=[...scanPts].sort((a,b)=>a[0]-b[0]);
-    ctxM.beginPath();
-    ctxM.moveTo(v.x,v.y);
+    ctxM.beginPath(); ctxM.moveTo(v.x,v.y);
     for(const[ang,dist] of sorted){
       const rad=(ang-90)*Math.PI/180;
-      const px=v.x+Math.cos(rad)*dist/GRES*v.sc;
-      const py=v.y+Math.sin(rad)*dist/GRES*v.sc;
-      ctxM.lineTo(px,py);
+      ctxM.lineTo(v.x+Math.cos(rad)*dist/GRES*v.sc, v.y+Math.sin(rad)*dist/GRES*v.sc);
     }
     ctxM.closePath();
-    ctxM.fillStyle='rgba(40,100,200,0.10)';
-    ctxM.fill();
-    ctxM.strokeStyle='rgba(60,130,255,0.18)';
-    ctxM.lineWidth=1;
-    ctxM.stroke();
+    ctxM.fillStyle='rgba(30,80,160,0.13)'; ctxM.fill();
+    ctxM.strokeStyle='rgba(50,110,220,0.2)'; ctxM.lineWidth=1; ctxM.stroke();
   }
 
-  // Blit offscreen grid (rebuild only when new scan arrives)
-  if(gridDirty) rebuildGridCanvas();
-  if(offscreen.width>0){
-    ctxM.save();
-    ctxM.translate(v.x-ORIG*v.sc, v.y-ORIG*v.sc);
-    ctxM.scale(v.sc, v.sc);
-    ctxM.imageSmoothingEnabled=false;
-    ctxM.drawImage(offscreen,0,0);
-    ctxM.restore();
-  }
+  // Wall canvas blit
+  if(wallDirty) rebuildWallCanvas();
+  ctxM.save();
+  ctxM.translate(v.x-ORIG*v.sc, v.y-ORIG*v.sc);
+  ctxM.scale(v.sc,v.sc);
+  ctxM.imageSmoothingEnabled=v.sc<2;
+  ctxM.drawImage(wallCanvas,0,0);
+  ctxM.restore();
 
-  // Direction line (forward = 0°, pointing up from robot)
-  const dirLen=Math.min(W,H)*0.18;
-  ctxM.strokeStyle='rgba(232,88,10,0.7)'; ctxM.lineWidth=1.5; ctxM.setLineDash([4,5]);
+  // Direction arrow at 0°
+  const dirLen=60*v.sc+40;
+  ctxM.strokeStyle='rgba(232,88,10,0.55)'; ctxM.lineWidth=1.5; ctxM.setLineDash([4,5]);
   ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(v.x,v.y-dirLen); ctxM.stroke();
   ctxM.setLineDash([]);
-  ctxM.fillStyle='rgba(232,88,10,0.6)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
+  ctxM.fillStyle='rgba(232,88,10,0.5)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
   ctxM.fillText('0°',v.x,v.y-dirLen-5);
 
   // Robot
-  ctxM.beginPath(); ctxM.arc(v.x,v.y,7,0,Math.PI*2);
-  ctxM.fillStyle='rgba(232,88,10,0.12)'; ctxM.fill();
+  ctxM.beginPath(); ctxM.arc(v.x,v.y,9,0,Math.PI*2);
+  ctxM.fillStyle='rgba(232,88,10,0.1)'; ctxM.fill();
   ctxM.strokeStyle='#e8580a'; ctxM.lineWidth=1.5; ctxM.stroke();
-  ctxM.beginPath(); ctxM.arc(v.x,v.y,2.5,0,Math.PI*2);
+  ctxM.beginPath(); ctxM.arc(v.x,v.y,3,0,Math.PI*2);
   ctxM.fillStyle='#e8580a'; ctxM.fill();
 
   // Scale bar
-  const barM=v.sc*1000/GRES>=40?2:1;
+  const barM=v.sc*1000/GRES>=50?2:1;
   const bPx=barM*1000/GRES*v.sc;
-  ctxM.strokeStyle='rgba(100,120,200,0.6)'; ctxM.lineWidth=1.5;
+  ctxM.strokeStyle='rgba(100,130,210,0.55)'; ctxM.lineWidth=1.5;
   ctxM.beginPath(); ctxM.moveTo(14,H-13); ctxM.lineTo(14+bPx,H-13); ctxM.stroke();
-  ctxM.beginPath(); ctxM.moveTo(14,H-10); ctxM.lineTo(14,H-16); ctxM.stroke();
-  ctxM.beginPath(); ctxM.moveTo(14+bPx,H-10); ctxM.lineTo(14+bPx,H-16); ctxM.stroke();
-  ctxM.fillStyle='rgba(100,120,200,0.7)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
-  ctxM.fillText(Math.round(barM*3.281)+'ft',14+bPx/2,H-4);
+  ctxM.beginPath(); ctxM.moveTo(14,H-10); ctxM.lineTo(14,H-17); ctxM.stroke();
+  ctxM.beginPath(); ctxM.moveTo(14+bPx,H-10); ctxM.lineTo(14+bPx,H-17); ctxM.stroke();
+  ctxM.fillStyle='rgba(100,130,210,0.65)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
+  ctxM.fillText(Math.round(barM*3.281)+'ft',14+bPx/2,H-3);
 
-  // Nearest marker
+  // Nearest line
   let nearest=null;
   for(const[ang,dist] of scanPts) if(!nearest||dist<nearest.d) nearest={ang,d:dist};
   if(nearest){
     const rad=(nearest.ang-90)*Math.PI/180;
     const px=v.x+Math.cos(rad)*nearest.d/GRES*v.sc;
     const py=v.y+Math.sin(rad)*nearest.d/GRES*v.sc;
-    ctxM.strokeStyle='rgba(232,88,10,0.3)'; ctxM.lineWidth=1; ctxM.setLineDash([2,4]);
+    ctxM.strokeStyle='rgba(232,88,10,0.25)'; ctxM.lineWidth=1; ctxM.setLineDash([2,4]);
     ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(px,py); ctxM.stroke();
     ctxM.setLineDash([]);
     document.getElementById('s-near').innerHTML=(nearest.d/304.8).toFixed(1)+'<span class="unit">ft</span>';
@@ -307,7 +295,6 @@ function drawMap(){
 
   document.getElementById('st-sc').textContent=mapScans;
   document.getElementById('h-sc').textContent=mapScans;
-  document.getElementById('st-walls').textContent=wallCount;
   document.getElementById('st-mz').textContent=v.sc.toFixed(2)+'x';
   document.getElementById('m-info').textContent=mapScans+' scans · scroll=zoom · drag=pan';
 }
@@ -329,12 +316,12 @@ requestAnimationFrame(loop);
 // ── Gas ───────────────────────────────────────────────────────────────────────
 const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
 let gasMax={co:1,no2:.01,nh3:1};
-function glv(v,k){return v>=THR[k].d?'danger':v>=THR[k].c?'caution':'normal';}
+function glv(val,k){return val>=THR[k].d?'danger':val>=THR[k].c?'caution':'normal';}
 function updateGas(co,no2,nh3){
   gasMax.co=Math.max(gasMax.co,co*1.05+.01);
   gasMax.no2=Math.max(gasMax.no2,no2*1.05+.0001);
   gasMax.nh3=Math.max(gasMax.nh3,nh3*1.05+.01);
-  const pct=(v,m)=>Math.min(100,v/m*100).toFixed(1)+'%';
+  const pct=(val,m)=>Math.min(100,val/m*100).toFixed(1)+'%';
   document.getElementById('co-v').innerHTML=co.toFixed(2)+'<span class="gc-unit">ppm</span>';
   document.getElementById('no2-v').innerHTML=no2.toFixed(4)+'<span class="gc-unit">ppm</span>';
   document.getElementById('nh3-v').innerHTML=nh3.toFixed(2)+'<span class="gc-unit">ppm</span>';
@@ -372,7 +359,7 @@ function parseLine(line){
       scanPts=pts;
       for(const[a,d] of pts) updateGrid(a,d);
       mapScans++;
-      gridDirty=true;
+      wallDirty=true;
     }
   } else if(line.startsWith('G:')){
     const[co,no2,nh3]=line.slice(2).split(',').map(Number);
@@ -380,41 +367,77 @@ function parseLine(line){
   }
 }
 
-// ── WebSerial ─────────────────────────────────────────────────────────────────
-let port=null, running=false;
-function setOnline(on){
-  document.getElementById('badge').textContent=on?'LIVE':'OFFLINE';
-  document.getElementById('badge').className='pill '+(on?'p-live':'p-off');
+// ── WebSerial — auto-reconnect ────────────────────────────────────────────────
+let port=null, running=false, reconnectTimer=null;
+
+function setStatus(state){
+  const b=document.getElementById('badge');
+  const c=document.getElementById('btnC');
+  if(state==='live'){b.textContent='LIVE';b.className='pill p-live';c.textContent='Connect Serial';}
+  else if(state==='wait'){b.textContent='RECONNECTING';b.className='pill p-wait';c.textContent='Connect Serial';}
+  else{b.textContent='OFFLINE';b.className='pill p-off';c.textContent='Connect Serial';}
 }
+
 async function doConnect(){
   if(!('serial' in navigator)){alert('Use Chrome or Edge.');return;}
+  clearTimeout(reconnectTimer);
+  if(port){await doDisconnect();}
   try{
     port=await navigator.serial.requestPort();
     await port.open({baudRate:115200});
-    running=true; setOnline(true); readLoop();
-  }catch(e){if(e.name!=='NotFoundError')alert('Failed: '+e.message);}
+    running=true; setStatus('live'); readLoop();
+  }catch(e){
+    port=null;
+    if(e.name!=='NotFoundError') alert('Failed: '+e.message);
+  }
 }
+
 async function doDisconnect(){
-  running=false;
+  running=false; clearTimeout(reconnectTimer);
   try{await port?.readable?.cancel();}catch{}
   try{await port?.close();}catch{}
-  port=null; setOnline(false);
+  port=null; setStatus('offline');
 }
+
 async function readLoop(){
   const dec=new TextDecoder(); let buf='';
   const reader=port.readable.getReader();
   try{
     while(running){
-      const{value,done}=await reader.read(); if(done)break;
+      const{value,done}=await reader.read(); if(done) break;
       buf+=dec.decode(value,{stream:true});
       buf=buf.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-      const last=buf.lastIndexOf('\n'); if(last===-1)continue;
+      const last=buf.lastIndexOf('\n'); if(last===-1) continue;
       const block=buf.slice(0,last); buf=buf.slice(last+1);
       for(const raw of block.split('\n')){const l=raw.trim();if(l)parseLine(l);}
-      if(buf.length>16000)buf='';
+      if(buf.length>16000) buf='';
     }
-  }catch(e){if(running)console.error(e);}
-  finally{reader.releaseLock();setOnline(false);}
+  }catch(e){
+    if(running) console.warn('Serial read error:',e.message);
+  }finally{
+    reader.releaseLock();
+    try{await port?.close();}catch{}
+    port=null;
+    if(running){
+      setStatus('wait');
+      reconnectTimer=setTimeout(tryReconnect,2000);
+    } else {
+      setStatus('offline');
+    }
+  }
+}
+
+async function tryReconnect(){
+  if(!running) return;
+  try{
+    const ports=await navigator.serial.getPorts();
+    if(!ports.length){reconnectTimer=setTimeout(tryReconnect,2000);return;}
+    port=ports[0];
+    await port.open({baudRate:115200});
+    setStatus('live'); readLoop();
+  }catch(e){
+    reconnectTimer=setTimeout(tryReconnect,2000);
+  }
 }
 </script>
 </body>
