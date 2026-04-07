@@ -20,16 +20,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .hbtn{padding:4px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;transition:border-color .15s,color .15s}
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
 .hbtn.hi{border-color:var(--accent);color:var(--accent)}
-
 #warmup-bar{display:none;padding:5px 16px;background:#0d0e14;border-bottom:1px solid var(--border);align-items:center;gap:12px;flex-shrink:0}
 #warmup-bar.show{display:flex}
-#wu-label{font-size:11px;color:#fbbf24;white-space:nowrap;min-width:180px}
+#wu-label{font-size:11px;color:#fbbf24;white-space:nowrap;min-width:200px}
 #wu-track{flex:1;height:4px;background:#16192a;border-radius:2px;overflow:hidden}
 #wu-fill{height:100%;border-radius:2px;background:#fbbf24;transition:width .9s linear}
 #wu-time{font-size:11px;font-family:monospace;color:#fbbf24;min-width:36px;text-align:right}
-
 #banner{display:none;padding:3px 14px;font-size:11px;font-weight:700;text-align:center;letter-spacing:.05em;flex-shrink:0}
-#body{display:grid;grid-template-columns:1fr 188px;gap:1px;background:var(--border);overflow:hidden}
+#body{display:grid;grid-template-columns:1fr 200px;gap:1px;background:var(--border);overflow:hidden}
 .pane{background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
 .ptitle{font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);padding:5px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--panel)}
 .ptitle em{font-size:10px;color:#4a5070;font-style:normal;text-transform:none;letter-spacing:0}
@@ -38,13 +36,13 @@ canvas#cvM:active{cursor:grabbing}
 #sb{display:flex;flex-direction:column;gap:1px;background:var(--border);overflow-y:auto}
 .sc{background:var(--panel);padding:10px 12px;flex-shrink:0}
 .sc-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:7px}
-.big{font-size:24px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--text)}
+.big{font-size:22px;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--text)}
 .unit{font-size:10px;color:var(--muted);margin-left:2px;font-weight:400}
 .sub{font-size:10px;color:#353a55;margin-top:4px}
 .gcard{background:var(--dim);border:1px solid var(--border);border-radius:5px;padding:8px 9px;margin-bottom:4px}
 .gcard:last-child{margin-bottom:0}
 .gc-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:4px}
-.gc-val{font-size:16px;font-weight:700;line-height:1}
+.gc-val{font-size:15px;font-weight:700;line-height:1}
 .gc-unit{font-size:9px;color:var(--muted);margin-left:2px;font-weight:400}
 .gbar{height:2px;background:#0e1018;border-radius:1px;margin:6px 0 5px;overflow:hidden}
 .gbf{height:100%;border-radius:1px;transition:width .5s cubic-bezier(.4,0,.2,1)}
@@ -60,7 +58,8 @@ canvas#cvM:active{cursor:grabbing}
 .sk{font-size:10px;color:var(--muted)}.sv{font-size:10px;font-family:monospace;color:var(--text)}
 .clrbtn{width:100%;padding:5px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;transition:all .15s}
 .clrbtn:hover{border-color:#f87171;color:#f87171}
-
+#ai-log{font-size:10px;font-family:monospace;color:#353a55;line-height:1.7;padding:8px 10px;background:var(--dim);border-radius:4px;min-height:40px;word-break:break-word}
+#ai-log span{color:#4ade80}
 #cal-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.75);z-index:100;align-items:center;justify-content:center}
 #cal-overlay.open{display:flex}
 #cal-box{background:#0d0e14;border:1px solid #1e2238;border-radius:8px;padding:22px 24px;width:330px;display:flex;flex-direction:column;gap:14px}
@@ -95,6 +94,7 @@ canvas#cvM:active{cursor:grabbing}
   <div class="hstat">Near <b id="h-near">—</b></div>
   <div class="hstat">Scans <b id="h-sc">0</b></div>
   <div class="hstat">FPS <b id="h-fps">—</b></div>
+  <div class="hstat">Pose <b id="h-pose">0,0 0°</b></div>
   <div id="sp"></div>
   <button class="hbtn hi" onclick="doConnect()">Connect Serial</button>
   <button class="hbtn" onclick="doDisconnect()">Disconnect</button>
@@ -102,24 +102,17 @@ canvas#cvM:active{cursor:grabbing}
   <button class="hbtn" onclick="resetView()">Reset view</button>
   <button class="hbtn" onclick="openCal()">Calibrate gas</button>
 </div>
-
 <div id="warmup-bar">
   <span id="wu-label">Sensor warming up…</span>
   <div id="wu-track"><div id="wu-fill" style="width:0%"></div></div>
   <span id="wu-time">3:00</span>
 </div>
-
 <div id="banner"></div>
-
 <div id="cal-overlay">
   <div id="cal-box">
     <h2>Gas sensor calibration</h2>
-    <p>Place the sensor in clean ambient air. Set R0 to the current Rs values below, which represent the sensor's baseline resistance in a normal room. Hit "Use current Rs" then Save.</p>
-    <div class="cal-live">
-      CO Rs &nbsp;&nbsp; <b id="cl-co">—</b> Ω<br>
-      NO₂ Rs &nbsp;<b id="cl-no2">—</b> Ω<br>
-      NH₃ Rs &nbsp;<b id="cl-nh3">—</b> Ω
-    </div>
+    <p>Place the sensor in clean ambient air and hit "Use current Rs" to set R0 to the room baseline. Values are saved in your browser.</p>
+    <div class="cal-live">CO Rs &nbsp;&nbsp;<b id="cl-co">—</b> Ω<br>NO₂ Rs &nbsp;<b id="cl-no2">—</b> Ω<br>NH₃ Rs &nbsp;<b id="cl-nh3">—</b> Ω</div>
     <div class="cal-row"><label>R0 CO (Ω)</label><input id="r0-co" type="number" min="1"></div>
     <div class="cal-row"><label>R0 NO₂ (Ω)</label><input id="r0-no2" type="number" min="1"></div>
     <div class="cal-row"><label>R0 NH₃ (Ω)</label><input id="r0-nh3" type="number" min="1"></div>
@@ -130,10 +123,9 @@ canvas#cvM:active{cursor:grabbing}
     </div>
   </div>
 </div>
-
 <div id="body">
   <div class="pane">
-    <div class="ptitle">Smart map<em id="m-info">scroll=zoom · drag=pan</em></div>
+    <div class="ptitle">Smart map — AI SLAM<em id="m-info">scroll=zoom · drag=pan</em></div>
     <canvas id="cvM"></canvas>
   </div>
   <div id="sb">
@@ -141,6 +133,10 @@ canvas#cvM:active{cursor:grabbing}
       <div class="sc-lbl">Nearest obstacle</div>
       <div class="big" id="s-near">—<span class="unit">ft</span></div>
       <div class="sub" id="s-near-dir">—</div>
+    </div>
+    <div class="sc">
+      <div class="sc-lbl">AI map notes</div>
+      <div id="ai-log">Waiting for scan data…</div>
     </div>
     <div class="sc">
       <div class="sc-lbl">Air quality</div>
@@ -166,21 +162,24 @@ canvas#cvM:active{cursor:grabbing}
     <div class="sc">
       <div class="sc-lbl">Stats</div>
       <div class="stat-row"><span class="sk">Scans</span><span class="sv" id="st-sc">0</span></div>
+      <div class="stat-row"><span class="sk">World pts</span><span class="sv" id="st-wpts">0</span></div>
       <div class="stat-row"><span class="sk">Zoom</span><span class="sv" id="st-mz">—</span></div>
       <button class="clrbtn" onclick="clearAll()">Clear map</button>
     </div>
   </div>
 </div>
 </div>
-
 <script>
-const cvM=document.getElementById('cvM'), ctxM=cvM.getContext('2d');
-
-// ── Occupancy grid ────────────────────────────────────────────────────────────
-const GRES=30, GSIZ=600, ORIG=GSIZ/2;
+// ── World map (persistent across robot movement) ──────────────────────────────
+const GRES=30, GSIZ=700, ORIG=GSIZ/2;
 const grid=new Float32Array(GSIZ*GSIZ);
-const WALL_HIT=5, WALL_MISS=-1, WALL_MAX=60;
-let mapScans=0, scanPts=[];
+const WALL_HIT=5, WALL_MISS=-0.8, WALL_MAX=60;
+let mapScans=0, scanPts=[], worldPts=[];
+
+// Robot pose in world frame (mm, degrees)
+let pose={x:0, y:0, heading:0};
+// Pose history for path drawing
+let poseHistory=[{x:0,y:0}];
 
 const wallCanvas=document.createElement('canvas');
 wallCanvas.width=GSIZ; wallCanvas.height=GSIZ;
@@ -188,17 +187,36 @@ const wctx=wallCanvas.getContext('2d');
 let wallDirty=false;
 
 function clearAll(){
-  grid.fill(0); mapScans=0; scanPts=[];
+  grid.fill(0); mapScans=0; scanPts=[]; worldPts=[];
+  pose={x:0,y:0,heading:0}; poseHistory=[{x:0,y:0}];
   wctx.clearRect(0,0,GSIZ,GSIZ); wallDirty=false;
   document.getElementById('st-sc').textContent='0';
+  document.getElementById('st-wpts').textContent='0';
   document.getElementById('h-sc').textContent='0';
+  document.getElementById('h-pose').textContent='0,0 0°';
+  document.getElementById('ai-log').innerHTML='Waiting for scan data…';
 }
 
-function updateGrid(ang,dist){
-  const rad=(ang-90)*Math.PI/180;
-  const ex=Math.cos(rad)*dist/GRES, ey=Math.sin(rad)*dist/GRES;
-  const gex=Math.round(ex+ORIG), gey=Math.round(ey+ORIG);
-  let x=ORIG|0, y=ORIG|0;
+// Transform local scan point to world frame
+function localToWorld(ang, dist){
+  const worldAng = (ang + pose.heading) * Math.PI / 180;
+  return {
+    x: pose.x + Math.cos(worldAng) * dist,
+    y: pose.y + Math.sin(worldAng) * dist
+  };
+}
+
+function worldToGrid(wx, wy){
+  return {
+    gx: Math.round(wx / GRES + ORIG),
+    gy: Math.round(wy / GRES + ORIG)
+  };
+}
+
+function updateGrid(wx, wy, robotWx, robotWy){
+  const{gx:gex,gy:gey}=worldToGrid(wx,wy);
+  const{gx:startX,gy:startY}=worldToGrid(robotWx,robotWy);
+  let x=startX, y=startY;
   const dx=Math.abs(gex-x), dy=Math.abs(gey-y);
   const sx=x<gex?1:-1, sy=y<gey?1:-1;
   let err=dx-dy, steps=0, max=dx+dy+2;
@@ -206,14 +224,14 @@ function updateGrid(ang,dist){
     if(x===gex&&y===gey) break;
     if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){
       const i=y*GSIZ+x;
-      grid[i]=Math.max(-40, grid[i]+WALL_MISS);
+      grid[i]=Math.max(-40,grid[i]+WALL_MISS);
     }
     const e2=2*err;
     if(e2>-dy){err-=dy;x+=sx;}
     if(e2<dx){err+=dx;y+=sy;}
   }
   if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ)
-    grid[gey*GSIZ+gex]=Math.min(WALL_MAX, grid[gey*GSIZ+gex]+WALL_HIT);
+    grid[gey*GSIZ+gex]=Math.min(WALL_MAX,grid[gey*GSIZ+gex]+WALL_HIT);
 }
 
 function rebuildWallCanvas(){
@@ -224,17 +242,80 @@ function rebuildWallCanvas(){
       if(val<8) continue;
       const t=Math.min(1,val/WALL_MAX);
       const i=(gy*GSIZ+gx)*4;
-      d[i]  =Math.round(20+t*30);
-      d[i+1]=Math.round(140+t*100);
-      d[i+2]=Math.round(210+t*45);
-      d[i+3]=Math.round(180+t*75);
+      d[i]=Math.round(20+t*30); d[i+1]=Math.round(140+t*100);
+      d[i+2]=Math.round(210+t*45); d[i+3]=Math.round(180+t*75);
     }
   }
   wctx.putImageData(img,0,0);
   wallDirty=false;
 }
 
+// ── ICP-style scan matching (align new scan to world points) ──────────────────
+// Simple centroid + orientation match — no external libs needed
+let prevScanWorld=[];
+
+function matchAndUpdatePose(newPtsLocal){
+  if(prevScanWorld.length<10||newPtsLocal.length<10){
+    return; // not enough data yet
+  }
+  // Project new scan with current pose estimate
+  const newWorld=newPtsLocal.map(([a,d])=>localToWorld(a,d));
+
+  // Find closest point pairs and compute translation correction
+  let dx=0, dy=0, count=0;
+  for(const np of newWorld){
+    let best=null, bestD=Infinity;
+    for(const pp of prevScanWorld){
+      const dd=(np.x-pp.x)**2+(np.y-pp.y)**2;
+      if(dd<bestD){bestD=dd;best=pp;}
+    }
+    if(best&&bestD<(200*200)){ // within 200mm
+      dx+=best.x-np.x; dy+=best.y-np.y; count++;
+    }
+  }
+  if(count>5){
+    const alpha=0.3; // how much to trust the correction
+    pose.x+=dx/count*alpha;
+    pose.y+=dy/count*alpha;
+  }
+}
+
+// ── AI SLAM — call Claude to interpret scan deltas ────────────────────────────
+let aiThrottle=0, aiPending=false;
+const AI_INTERVAL=15; // every N scans
+
+async function aiInterpretScan(pts){
+  if(aiPending) return;
+  aiPending=true;
+  const sample=pts.filter((_,i)=>i%6===0).slice(0,40);
+  const desc=sample.map(([a,d])=>`${a.toFixed(0)}°:${(d/304.8).toFixed(1)}ft`).join(' ');
+  const prompt=`You are interpreting LiDAR scan data from a ground robot. Current robot pose: x=${(pose.x/304.8).toFixed(1)}ft, y=${(pose.y/304.8).toFixed(1)}ft, heading=${pose.heading.toFixed(0)}°.
+Scan points (angle:distance): ${desc}
+In one short sentence (max 12 words), describe what the robot likely sees — e.g. wall directions, open space, corners, doorways. Be specific and concise.`;
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:60,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data=await r.json();
+    const txt=data.content?.[0]?.text||'';
+    if(txt){
+      const el=document.getElementById('ai-log');
+      el.innerHTML=`<span>${txt}</span>`;
+    }
+  }catch(e){
+    document.getElementById('ai-log').textContent='AI unavailable';
+  }
+  aiPending=false;
+}
+
 // ── Canvas / view ─────────────────────────────────────────────────────────────
+const cvM=document.getElementById('cvM'), ctxM=cvM.getContext('2d');
 function resizeAll(){
   const p=cvM.parentElement;
   cvM.width=p.clientWidth; cvM.height=p.clientHeight-28;
@@ -259,15 +340,24 @@ cvM.addEventListener('mousedown',e=>{drag=true;dsx=e.clientX;dsy=e.clientY;dox=v
 window.addEventListener('mousemove',e=>{if(!drag)return;v.x=dox+(e.clientX-dsx);v.y=doy+(e.clientY-dsy);});
 window.addEventListener('mouseup',()=>drag=false);
 
+// World-to-screen helpers
+function w2s(wx,wy){
+  const{gx,gy}=worldToGrid(wx,wy);
+  return{
+    px: v.x+(gx-ORIG)*v.sc,
+    py: v.y+(gy-ORIG)*v.sc
+  };
+}
+
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function drawMap(){
   const W=cvM.width, H=cvM.height; if(!W||!H) return;
   ctxM.fillStyle='#08090c'; ctxM.fillRect(0,0,W,H);
 
-  // Grid lines
+  // Grid
   const gStep=Math.round(1000/GRES)*v.sc;
   if(gStep>14){
-    ctxM.strokeStyle='rgba(255,255,255,0.025)'; ctxM.lineWidth=1;
+    ctxM.strokeStyle='rgba(255,255,255,0.022)'; ctxM.lineWidth=1;
     const ox=((v.x-ORIG*v.sc)%gStep+gStep)%gStep;
     const oy=((v.y-ORIG*v.sc)%gStep+gStep)%gStep;
     for(let x=ox;x<W;x+=gStep){ctxM.beginPath();ctxM.moveTo(x,0);ctxM.lineTo(x,H);ctxM.stroke();}
@@ -276,26 +366,28 @@ function drawMap(){
 
   // Range rings
   ctxM.font='9px monospace'; ctxM.textAlign='left';
+  const robS=w2s(pose.x,pose.y);
   for(let m=1;m<=10;m++){
     const r=m*1000/GRES*v.sc;
     if(r<20||r>Math.max(W,H)) continue;
-    ctxM.strokeStyle='rgba(255,255,255,0.04)'; ctxM.lineWidth=1;
-    ctxM.beginPath(); ctxM.arc(v.x,v.y,r,0,Math.PI*2); ctxM.stroke();
-    ctxM.fillStyle='#2a3050';
-    ctxM.fillText(Math.round(m*3.281)+'ft',v.x+r+4,v.y+4);
+    ctxM.strokeStyle='rgba(255,255,255,0.035)'; ctxM.lineWidth=1;
+    ctxM.beginPath(); ctxM.arc(robS.px,robS.py,r,0,Math.PI*2); ctxM.stroke();
+    ctxM.fillStyle='#252a40';
+    ctxM.fillText(Math.round(m*3.281)+'ft',robS.px+r+3,robS.py+3);
   }
 
-  // Free-space polygon
+  // Free-space polygon in world frame
   if(scanPts.length>2){
     const sorted=[...scanPts].sort((a,b)=>a[0]-b[0]);
-    ctxM.beginPath(); ctxM.moveTo(v.x,v.y);
+    ctxM.beginPath(); ctxM.moveTo(robS.px,robS.py);
     for(const[ang,dist] of sorted){
-      const rad=(ang-90)*Math.PI/180;
-      ctxM.lineTo(v.x+Math.cos(rad)*dist/GRES*v.sc, v.y+Math.sin(rad)*dist/GRES*v.sc);
+      const wp=localToWorld(ang,dist);
+      const s=w2s(wp.x,wp.y);
+      ctxM.lineTo(s.px,s.py);
     }
     ctxM.closePath();
-    ctxM.fillStyle='rgba(30,80,160,0.13)'; ctxM.fill();
-    ctxM.strokeStyle='rgba(50,110,220,0.18)'; ctxM.lineWidth=1; ctxM.stroke();
+    ctxM.fillStyle='rgba(30,80,160,0.12)'; ctxM.fill();
+    ctxM.strokeStyle='rgba(50,110,220,0.16)'; ctxM.lineWidth=1; ctxM.stroke();
   }
 
   // Wall canvas
@@ -307,19 +399,32 @@ function drawMap(){
   ctxM.drawImage(wallCanvas,0,0);
   ctxM.restore();
 
-  // 0° direction line
+  // Path history
+  if(poseHistory.length>1){
+    ctxM.strokeStyle='rgba(232,88,10,0.25)'; ctxM.lineWidth=1.5;
+    ctxM.beginPath();
+    poseHistory.forEach((p,i)=>{
+      const s=w2s(p.x,p.y);
+      i===0?ctxM.moveTo(s.px,s.py):ctxM.lineTo(s.px,s.py);
+    });
+    ctxM.stroke();
+  }
+
+  // 0° direction line from robot
+  const headRad=(pose.heading-90)*Math.PI/180;
   const dirLen=60*v.sc+40;
+  const dx2=Math.cos(headRad)*dirLen, dy2=Math.sin(headRad)*dirLen;
   ctxM.strokeStyle='rgba(232,88,10,0.55)'; ctxM.lineWidth=1.5; ctxM.setLineDash([4,5]);
-  ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(v.x,v.y-dirLen); ctxM.stroke();
+  ctxM.beginPath(); ctxM.moveTo(robS.px,robS.py); ctxM.lineTo(robS.px+dx2,robS.py+dy2); ctxM.stroke();
   ctxM.setLineDash([]);
   ctxM.fillStyle='rgba(232,88,10,0.5)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
-  ctxM.fillText('0°',v.x,v.y-dirLen-5);
+  ctxM.fillText('0°',robS.px+dx2,robS.py+dy2-5);
 
   // Robot
-  ctxM.beginPath(); ctxM.arc(v.x,v.y,9,0,Math.PI*2);
+  ctxM.beginPath(); ctxM.arc(robS.px,robS.py,9,0,Math.PI*2);
   ctxM.fillStyle='rgba(232,88,10,0.1)'; ctxM.fill();
   ctxM.strokeStyle='#e8580a'; ctxM.lineWidth=1.5; ctxM.stroke();
-  ctxM.beginPath(); ctxM.arc(v.x,v.y,3,0,Math.PI*2);
+  ctxM.beginPath(); ctxM.arc(robS.px,robS.py,3,0,Math.PI*2);
   ctxM.fillStyle='#e8580a'; ctxM.fill();
 
   // Scale bar
@@ -332,15 +437,14 @@ function drawMap(){
   ctxM.fillStyle='rgba(100,130,210,0.65)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
   ctxM.fillText(Math.round(barM*3.281)+'ft',14+bPx/2,H-3);
 
-  // Nearest line
+  // Nearest
   let nearest=null;
   for(const[ang,dist] of scanPts) if(!nearest||dist<nearest.d) nearest={ang,d:dist};
   if(nearest){
-    const rad=(nearest.ang-90)*Math.PI/180;
-    const px=v.x+Math.cos(rad)*nearest.d/GRES*v.sc;
-    const py=v.y+Math.sin(rad)*nearest.d/GRES*v.sc;
+    const wp=localToWorld(nearest.ang,nearest.d);
+    const s=w2s(wp.x,wp.y);
     ctxM.strokeStyle='rgba(232,88,10,0.25)'; ctxM.lineWidth=1; ctxM.setLineDash([2,4]);
-    ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(px,py); ctxM.stroke();
+    ctxM.beginPath(); ctxM.moveTo(robS.px,robS.py); ctxM.lineTo(s.px,s.py); ctxM.stroke();
     ctxM.setLineDash([]);
     document.getElementById('s-near').innerHTML=(nearest.d/304.8).toFixed(1)+'<span class="unit">ft</span>';
     document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/304.8).toFixed(1)+' ft';
@@ -349,7 +453,9 @@ function drawMap(){
 
   document.getElementById('st-sc').textContent=mapScans;
   document.getElementById('h-sc').textContent=mapScans;
+  document.getElementById('st-wpts').textContent=worldPts.length;
   document.getElementById('st-mz').textContent=v.sc.toFixed(2)+'x';
+  document.getElementById('h-pose').textContent=`${(pose.x/304.8).toFixed(1)},${(pose.y/304.8).toFixed(1)} ${pose.heading.toFixed(0)}°`;
   document.getElementById('m-info').textContent=mapScans+' scans · scroll=zoom · drag=pan';
 }
 
@@ -366,32 +472,21 @@ function loop(){
 }
 requestAnimationFrame(loop);
 
-// ── Warmup timer ──────────────────────────────────────────────────────────────
+// ── Warmup ────────────────────────────────────────────────────────────────────
 let wuTotal=180;
-function showWarmup(total){
-  wuTotal=total;
-  document.getElementById('warmup-bar').classList.add('show');
-}
+function showWarmup(total){wuTotal=total;document.getElementById('warmup-bar').classList.add('show');}
 function tickWarmup(remaining){
-  const pct=((wuTotal-remaining)/wuTotal*100).toFixed(1);
-  document.getElementById('wu-fill').style.width=pct+'%';
-  const m=Math.floor(remaining/60), s=remaining%60;
+  document.getElementById('wu-fill').style.width=((wuTotal-remaining)/wuTotal*100).toFixed(1)+'%';
+  const m=Math.floor(remaining/60),s=remaining%60;
   document.getElementById('wu-time').textContent=m+':'+(s<10?'0':'')+s;
-  document.getElementById('wu-label').textContent='Sensor warming up…';
 }
-function finishWarmup(){
-  document.getElementById('wu-fill').style.width='100%';
-  document.getElementById('wu-label').textContent='Calibrating…';
-}
-function hideWarmup(){
-  document.getElementById('warmup-bar').classList.remove('show');
-}
+function finishWarmup(){document.getElementById('wu-fill').style.width='100%';document.getElementById('wu-label').textContent='Calibrating…';}
+function hideWarmup(){document.getElementById('warmup-bar').classList.remove('show');}
 
-// ── Calibration modal ─────────────────────────────────────────────────────────
+// ── Calibration ───────────────────────────────────────────────────────────────
 let calR0={co:51234,no2:49650,nh3:52871};
 let liveRs={co:null,no2:null,nh3:null};
 try{const s=localStorage.getItem('prom_r0');if(s)calR0={...calR0,...JSON.parse(s)};}catch(e){}
-
 function openCal(){
   document.getElementById('r0-co').value=Math.round(calR0.co);
   document.getElementById('r0-no2').value=Math.round(calR0.no2);
@@ -407,35 +502,32 @@ function updateCalLive(){
   document.getElementById('cl-nh3').textContent=fmt(liveRs.nh3);
 }
 function useCurrentRs(){
-  if(liveRs.co) document.getElementById('r0-co').value=Math.round(liveRs.co);
-  if(liveRs.no2) document.getElementById('r0-no2').value=Math.round(liveRs.no2);
-  if(liveRs.nh3) document.getElementById('r0-nh3').value=Math.round(liveRs.nh3);
+  if(liveRs.co)document.getElementById('r0-co').value=Math.round(liveRs.co);
+  if(liveRs.no2)document.getElementById('r0-no2').value=Math.round(liveRs.no2);
+  if(liveRs.nh3)document.getElementById('r0-nh3').value=Math.round(liveRs.nh3);
 }
 function saveCal(){
   const co=parseFloat(document.getElementById('r0-co').value);
   const no2=parseFloat(document.getElementById('r0-no2').value);
   const nh3=parseFloat(document.getElementById('r0-nh3').value);
-  if([co,no2,nh3].some(v=>isNaN(v)||v<=0)){alert('Enter valid positive values for all three.');return;}
+  if([co,no2,nh3].some(v=>isNaN(v)||v<=0)){alert('Enter valid positive values.');return;}
   calR0={co,no2,nh3};
   try{localStorage.setItem('prom_r0',JSON.stringify(calR0));}catch(e){}
   closeCal();
 }
 
-// ── Gas display ───────────────────────────────────────────────────────────────
+// ── Gas ───────────────────────────────────────────────────────────────────────
 const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
-let gasMax={co:1,no2:.01,nh3:1}, lastGas=[null,null,null];
-
+let gasMax={co:1,no2:.01,nh3:1},lastGas=[null,null,null];
 function setAllGasStatus(cls,lbl){
   ['co','no2','nh3'].forEach(g=>{
     document.getElementById(g+'-s').className='gst '+cls;
     document.getElementById(g+'-s').textContent=lbl;
   });
 }
-
 function glv(val,k){return val>=THR[k].d?'danger':val>=THR[k].c?'caution':'normal';}
-
 function updateGas(co,no2,nh3){
-  if(lastGas[0]===co&&lastGas[1]===no2&&lastGas[2]===nh3) return;
+  if(lastGas[0]===co&&lastGas[1]===no2&&lastGas[2]===nh3)return;
   lastGas=[co,no2,nh3];
   gasMax.co=Math.max(gasMax.co,co*1.1+.5);
   gasMax.no2=Math.max(gasMax.no2,no2*1.1+.005);
@@ -475,39 +567,53 @@ function parseLine(line){
       return[ang,parseInt(d)];
     }).filter(([a,d])=>!isNaN(a)&&!isNaN(d)&&d>50&&d<12000);
     if(pts.length){
+      // Scan match to refine pose
+      matchAndUpdatePose(pts);
       scanPts=pts;
-      for(const[a,d] of pts) updateGrid(a,d);
+      // Add world-frame points to grid
+      for(const[a,d] of pts){
+        const wp=localToWorld(a,d);
+        updateGrid(wp.x,wp.y,pose.x,pose.y);
+        worldPts.push(wp);
+      }
+      if(worldPts.length>80000) worldPts=worldPts.slice(-60000);
+      // Save scan as previous for next match
+      prevScanWorld=pts.map(([a,d])=>localToWorld(a,d));
       mapScans++; wallDirty=true;
+      // AI every N scans
+      aiThrottle++;
+      if(aiThrottle>=AI_INTERVAL){aiThrottle=0;aiInterpretScan(pts);}
+    }
+  } else if(line.startsWith('H:')){
+    // Optional heading update from Pico: H:45.2
+    const h=parseFloat(line.slice(2));
+    if(!isNaN(h)){
+      pose.heading=h;
+      poseHistory.push({x:pose.x,y:pose.y});
+      if(poseHistory.length>500) poseHistory=poseHistory.slice(-400);
     }
   } else if(line.startsWith('G:')){
     const val=line.slice(2);
-    if(val.startsWith('warmup,')){
-      const total=parseInt(val.split(',')[1])||180;
-      showWarmup(total);
-      setAllGasStatus('s-w','Warming up');
-    } else if(val.startsWith('countdown,')){
-      tickWarmup(parseInt(val.split(',')[1])||0);
-    } else if(val==='calibrating'){
-      finishWarmup();
-      setAllGasStatus('s-w','Calibrating');
-    } else if(val.startsWith('ready,')){
+    if(val.startsWith('warmup,')){showWarmup(parseInt(val.split(',')[1])||180);setAllGasStatus('s-w','Warming up');}
+    else if(val.startsWith('countdown,')){tickWarmup(parseInt(val.split(',')[1])||0);}
+    else if(val==='calibrating'){finishWarmup();setAllGasStatus('s-w','Calibrating');}
+    else if(val.startsWith('ready,')){
       hideWarmup();
       const[,co,no2,nh3]=val.split(',');
-      calR0={co:parseFloat(co)||calR0.co, no2:parseFloat(no2)||calR0.no2, nh3:parseFloat(nh3)||calR0.nh3};
+      calR0={co:parseFloat(co)||calR0.co,no2:parseFloat(no2)||calR0.no2,nh3:parseFloat(nh3)||calR0.nh3};
       setAllGasStatus('s-n','Ready');
     } else if(val.startsWith('RS:')){
       const[co,no2,nh3]=val.slice(3).split(',').map(Number);
-      if(!isNaN(co)){liveRs={co,no2,nh3}; updateCalLive();}
+      if(!isNaN(co)){liveRs={co,no2,nh3};updateCalLive();}
     } else {
       const[co,no2,nh3]=val.split(',').map(Number);
-      if(!isNaN(co)) updateGas(co,no2,nh3);
+      if(!isNaN(co))updateGas(co,no2,nh3);
     }
   }
 }
 
 // ── WebSerial ─────────────────────────────────────────────────────────────────
-let port=null, running=false, reconnectTimer=null;
-
+let port=null,running=false,reconnectTimer=null;
 function setStatus(state){
   const b=document.getElementById('badge');
   if(state==='live'){b.textContent='LIVE';b.className='pill p-live';}
@@ -517,31 +623,31 @@ function setStatus(state){
 async function doConnect(){
   if(!('serial' in navigator)){alert('Use Chrome or Edge.');return;}
   clearTimeout(reconnectTimer);
-  if(port) await doDisconnect();
+  if(port)await doDisconnect();
   try{
     port=await navigator.serial.requestPort();
     await port.open({baudRate:115200});
-    running=true; setStatus('live'); readLoop();
+    running=true;setStatus('live');readLoop();
   }catch(e){port=null;if(e.name!=='NotFoundError')alert('Failed: '+e.message);}
 }
 async function doDisconnect(){
-  running=false; clearTimeout(reconnectTimer);
+  running=false;clearTimeout(reconnectTimer);
   try{await port?.readable?.cancel();}catch{}
   try{await port?.close();}catch{}
-  port=null; setStatus('offline');
+  port=null;setStatus('offline');
 }
 async function readLoop(){
-  const dec=new TextDecoder(); let buf='';
+  const dec=new TextDecoder();let buf='';
   const reader=port.readable.getReader();
   try{
     while(running){
-      const{value,done}=await reader.read(); if(done) break;
+      const{value,done}=await reader.read();if(done)break;
       buf+=dec.decode(value,{stream:true});
       buf=buf.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-      const last=buf.lastIndexOf('\n'); if(last===-1) continue;
-      const block=buf.slice(0,last); buf=buf.slice(last+1);
+      const last=buf.lastIndexOf('\n');if(last===-1)continue;
+      const block=buf.slice(0,last);buf=buf.slice(last+1);
       for(const raw of block.split('\n')){const l=raw.trim();if(l)parseLine(l);}
-      if(buf.length>16000) buf='';
+      if(buf.length>16000)buf='';
     }
   }catch(e){if(running)console.warn(e.message);}
   finally{
@@ -553,12 +659,12 @@ async function readLoop(){
   }
 }
 async function tryReconnect(){
-  if(!running) return;
+  if(!running)return;
   try{
     const ports=await navigator.serial.getPorts();
     if(!ports.length){reconnectTimer=setTimeout(tryReconnect,2000);return;}
-    port=ports[0]; await port.open({baudRate:115200});
-    setStatus('live'); readLoop();
+    port=ports[0];await port.open({baudRate:115200});
+    setStatus('live');readLoop();
   }catch(e){reconnectTimer=setTimeout(tryReconnect,2000);}
 }
 </script>
