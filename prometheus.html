@@ -15,12 +15,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .pill{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.05em;flex-shrink:0}
 .p-off{background:#0d0f14;color:var(--muted);border:1px solid var(--border)}
 .p-live{background:#0d2a12;color:#4ade80;border:1px solid #1a5a22}
-.p-wait{background:#1a1400;color:#fbbf24;border:1px solid #3a2e00}
 #sp{flex:1}
 .hbtn{padding:4px 10px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
+.hbtn.hi{border-color:var(--accent);color:var(--accent)}
+#ws-status{font-size:10px;color:var(--muted);font-family:monospace}
 #banner{display:none;padding:4px 14px;font-size:11px;font-weight:700;text-align:center;letter-spacing:.04em;flex-shrink:0}
-#body{display:grid;grid-template-columns:1fr 1fr 192px;gap:1px;background:var(--border);overflow:hidden;min-height:0}
+#body{display:grid;grid-template-columns:1fr 192px;gap:1px;background:var(--border);overflow:hidden;min-height:0}
 .pane{background:var(--bg);display:flex;flex-direction:column;overflow:hidden;min-height:0}
 .ptitle{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--panel)}
 .ptitle em{font-size:10px;color:var(--text);font-style:normal;font-weight:600;text-transform:none;letter-spacing:0}
@@ -50,7 +51,6 @@ canvas:active{cursor:grabbing}
 .sk{font-size:10px;color:var(--muted)}.sv{font-size:10px;font-family:monospace;color:var(--text)}
 .clrbtn{width:100%;padding:5px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;transition:all .15s}
 .clrbtn:hover{border-color:#f87171;color:#f87171}
-#ws-status{font-size:10px;color:var(--muted);font-family:monospace}
 </style>
 </head>
 <body>
@@ -66,23 +66,18 @@ canvas:active{cursor:grabbing}
   </div>
   <div class="sep"></div>
   <span class="pill p-off" id="badge">OFFLINE</span>
-  <span id="ws-status">run prometheus_bridge.py to connect</span>
-  <div class="hstat">Pts <b id="h-pts">—</b></div>
+  <span id="ws-status">click Connect Serial</span>
   <div class="hstat">Near <b id="h-near">—</b></div>
-  <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div class="hstat">Scans <b id="h-sc">0</b></div>
+  <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div id="sp"></div>
   <button class="hbtn hi" id="btnC" onclick="doConnect()">Connect Serial</button>
   <button class="hbtn" onclick="doDisconnect()">Disconnect</button>
   <button class="hbtn" onclick="clearGrid()">Clear map</button>
-  <button class="hbtn" onclick="resetViews()">Reset views</button>
+  <button class="hbtn" onclick="resetView()">Reset view</button>
 </div>
 <div id="banner"></div>
 <div id="body">
-  <div class="pane">
-    <div class="ptitle">Live scan — RPLIDAR C1<em id="s-info">not connected</em></div>
-    <canvas id="cvS"></canvas>
-  </div>
   <div class="pane">
     <div class="ptitle">Memory map — occupancy grid<em id="m-info">scroll=zoom · drag=pan</em></div>
     <canvas id="cvM"></canvas>
@@ -115,152 +110,81 @@ canvas:active{cursor:grabbing}
       </div>
     </div>
     <div class="sc">
-      <div class="sc-lbl">Map stats</div>
-      <div class="stat-row"><span class="sk">Scan points</span><span class="sv" id="st-pts">—</span></div>
-      <div class="stat-row"><span class="sk">Scans logged</span><span class="sv" id="st-sc">0</span></div>
-      <div class="stat-row"><span class="sk">Live zoom</span><span class="sv" id="st-lz">—</span></div>
+      <div class="sc-lbl">Stats</div>
+      <div class="stat-row"><span class="sk">Scans</span><span class="sv" id="st-sc">0</span></div>
       <div class="stat-row"><span class="sk">Map zoom</span><span class="sv" id="st-mz">—</span></div>
-      <button class="clrbtn" onclick="clearGrid()">Clear memory map</button>
+      <button class="clrbtn" onclick="clearGrid()">Clear map</button>
     </div>
   </div>
 </div>
 </div>
 <script>
 // ── Occupancy grid ────────────────────────────────────────────────────────────
-const GRES=40,GSIZ=500,ORIG=GSIZ/2;
+const GRES=40, GSIZ=500, ORIG=GSIZ/2;
 const grid=new Int8Array(GSIZ*GSIZ);
-let mapScans=0;
+let mapScans=0, scanPts=[];
+
 function clearGrid(){
-  grid.fill(0);mapScans=0;
+  grid.fill(0); mapScans=0; scanPts=[];
   document.getElementById('st-sc').textContent='0';
   document.getElementById('h-sc').textContent='0';
 }
+
 function updateGrid(ang,dist){
   const rad=(ang-90)*Math.PI/180;
-  const ex=Math.cos(rad)*dist/GRES,ey=Math.sin(rad)*dist/GRES;
-  const gex=Math.round(ex+ORIG),gey=Math.round(ey+ORIG);
-  let x=ORIG,y=ORIG;
-  const dx=Math.abs(gex-x),dy=Math.abs(gey-y);
-  const sx=x<gex?1:-1,sy=y<gey?1:-1;
-  let err=dx-dy,steps=0,max=dx+dy;
+  const ex=Math.cos(rad)*dist/GRES, ey=Math.sin(rad)*dist/GRES;
+  const gex=Math.round(ex+ORIG), gey=Math.round(ey+ORIG);
+  let x=ORIG, y=ORIG;
+  const dx=Math.abs(gex-x), dy=Math.abs(gey-y);
+  const sx=x<gex?1:-1, sy=y<gey?1:-1;
+  let err=dx-dy, steps=0, max=dx+dy;
   while(steps++<max){
-    if(x===gex&&y===gey)break;
-    if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){const i=y*GSIZ+x;if(grid[i]>-100)grid[i]=Math.max(-100,grid[i]-1);}
+    if(x===gex&&y===gey) break;
+    if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){const i=y*GSIZ+x; if(grid[i]>-100)grid[i]=Math.max(-100,grid[i]-1);}
     const e2=2*err;
     if(e2>-dy){err-=dy;x+=sx;}
     if(e2<dx){err+=dx;y+=sy;}
   }
   if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ){
-    const i=gey*GSIZ+gex;if(grid[i]<100)grid[i]=Math.min(100,grid[i]+4);
+    const i=gey*GSIZ+gex; if(grid[i]<100)grid[i]=Math.min(100,grid[i]+4);
   }
 }
 
-// ── Canvases ──────────────────────────────────────────────────────────────────
-const cvS=document.getElementById('cvS'),cvM=document.getElementById('cvM');
-const ctxS=cvS.getContext('2d'),ctxM=cvM.getContext('2d');
+// ── Canvas ────────────────────────────────────────────────────────────────────
+const cvM=document.getElementById('cvM');
+const ctxM=cvM.getContext('2d');
+
 function resizeAll(){
-  [cvS,cvM].forEach(cv=>{
-    const p=cv.parentElement,h=p.clientHeight-30;
-    if(cv.width!==p.clientWidth||cv.height!==h){cv.width=p.clientWidth;cv.height=Math.max(1,h);}
-  });
+  const p=cvM.parentElement, h=p.clientHeight-30;
+  cvM.width=p.clientWidth; cvM.height=Math.max(1,h);
 }
 window.addEventListener('resize',resizeAll);
 setTimeout(resizeAll,60);
 
-// ── View state ────────────────────────────────────────────────────────────────
-const vS={x:0,y:0,sc:2},vM={x:0,y:0,sc:0.9};
-function resetViews(){
-  vS.x=cvS.width/2;vS.y=cvS.height/2;vS.sc=2;
-  vM.x=cvM.width/2;vM.y=cvM.height/2;vM.sc=0.9;
-}
-setTimeout(resetViews,80);
-function panZoom(cv,v){
-  let drag=false,sx=0,sy=0,ox=0,oy=0;
-  cv.addEventListener('wheel',e=>{e.preventDefault();v.sc=Math.max(.08,Math.min(20,v.sc*(e.deltaY<0?1.15:.87)));},{passive:false});
-  cv.addEventListener('mousedown',e=>{drag=true;sx=e.clientX;sy=e.clientY;ox=v.x;oy=v.y;});
-  window.addEventListener('mousemove',e=>{if(!drag)return;v.x=ox+(e.clientX-sx);v.y=oy+(e.clientY-sy);});
-  window.addEventListener('mouseup',()=>drag=false);
-}
-panZoom(cvS,vS);panZoom(cvM,vM);
+// ── View ──────────────────────────────────────────────────────────────────────
+const vM={x:0,y:0,sc:0.9};
+function resetView(){vM.x=cvM.width/2; vM.y=cvM.height/2; vM.sc=0.9;}
+setTimeout(resetView,80);
 
-// ── Color map ─────────────────────────────────────────────────────────────────
-const LIDAR=[[0,220,255],[0,255,120],[255,220,0],[255,80,0]];
-function lerpC(stops,t){
-  t=Math.max(0,Math.min(1,t));
-  const n=t*(stops.length-1),i=Math.min(Math.floor(n),stops.length-2),f=n-i;
-  const a=stops[i],b=stops[i+1];
-  return[a[0]+f*(b[0]-a[0])|0,a[1]+f*(b[1]-a[1])|0,a[2]+f*(b[2]-a[2])|0];
-}
+let drag=false,sx=0,sy=0,ox=0,oy=0;
+cvM.addEventListener('wheel',e=>{e.preventDefault();vM.sc=Math.max(.05,Math.min(20,vM.sc*(e.deltaY<0?1.15:.87)));},{passive:false});
+cvM.addEventListener('mousedown',e=>{drag=true;sx=e.clientX;sy=e.clientY;ox=vM.x;oy=vM.y;});
+window.addEventListener('mousemove',e=>{if(!drag)return;vM.x=ox+(e.clientX-sx);vM.y=oy+(e.clientY-sy);});
+window.addEventListener('mouseup',()=>drag=false);
 
-// ── Draw live scan ────────────────────────────────────────────────────────────
-let scanPts=[];
-const MAX_D=6000;
-function drawScan(){
-  const W=cvS.width,H=cvS.height;if(!W||!H)return;
-  const v=vS,cx=v.x,cy=v.y,maxR=Math.min(W,H)*.46*(v.sc/2);
-  ctxS.fillStyle='#08090c';ctxS.fillRect(0,0,W,H);
-  const rg=ctxS.createRadialGradient(cx,cy,0,cx,cy,maxR*1.2);
-  rg.addColorStop(0,'rgba(0,20,35,.3)');rg.addColorStop(1,'rgba(0,0,0,0)');
-  ctxS.fillStyle=rg;ctxS.fillRect(0,0,W,H);
-  ctxS.font='9px monospace';ctxS.textAlign='left';
-  [1,2,3,4,5,6].forEach(m=>{
-    const rp=m*1000/MAX_D*maxR;
-    ctxS.strokeStyle='rgba(20,26,40,.9)';ctxS.lineWidth=1;
-    ctxS.beginPath();ctxS.arc(cx,cy,rp,0,Math.PI*2);ctxS.stroke();
-    ctxS.fillStyle='#252a40';ctxS.fillText(m+'m',cx+4,cy-rp+10);
-  });
-  ctxS.strokeStyle='rgba(20,26,40,.7)';ctxS.lineWidth=.5;
-  for(let i=0;i<24;i++){
-    const a=i*Math.PI/12;
-    ctxS.beginPath();ctxS.moveTo(cx,cy);ctxS.lineTo(cx+Math.cos(a)*maxR,cy+Math.sin(a)*maxR);ctxS.stroke();
-  }
-  ctxS.fillStyle='#2a3050';ctxS.textAlign='center';ctxS.font='10px monospace';
-  ctxS.fillText('N',cx,cy-maxR-8);ctxS.fillText('S',cx,cy+maxR+14);
-  ctxS.fillText('E',cx+maxR+12,cy+4);ctxS.fillText('W',cx-maxR-12,cy+4);
-  if(!scanPts.length){
-    ctxS.fillStyle='#252a40';ctxS.font='12px monospace';ctxS.textAlign='center';
-    ctxS.fillText('waiting for data…',cx,cy+40);
-  }
-  let nearest=null;
-  for(const[ang,dist] of scanPts){
-    const rad=(ang-90)*Math.PI/180;
-    const r=Math.min(dist,MAX_D)/MAX_D*maxR;
-    const px=cx+Math.cos(rad)*r,py=cy+Math.sin(rad)*r;
-    const[rv,gv,bv]=lerpC(LIDAR,dist/MAX_D);
-    ctxS.fillStyle='rgba('+rv+','+gv+','+bv+',.1)';
-    ctxS.beginPath();ctxS.arc(px,py,4,0,Math.PI*2);ctxS.fill();
-    ctxS.fillStyle='rgb('+rv+','+gv+','+bv+')';
-    ctxS.beginPath();ctxS.arc(px,py,1.6,0,Math.PI*2);ctxS.fill();
-    if(!nearest||dist<nearest.d)nearest={ang,d:dist,px,py};
-  }
-  if(nearest){
-    ctxS.strokeStyle='rgba(232,88,10,.4)';ctxS.lineWidth=1;ctxS.setLineDash([3,5]);
-    ctxS.beginPath();ctxS.moveTo(cx,cy);ctxS.lineTo(nearest.px,nearest.py);ctxS.stroke();
-    ctxS.setLineDash([]);
-    document.getElementById('s-near').innerHTML=(nearest.d/10).toFixed(0)+'<span class="unit">cm</span>';
-    document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/10).toFixed(0)+' cm';
-    document.getElementById('h-near').textContent=(nearest.d/10).toFixed(0)+'cm';
-  }
-  ctxS.fillStyle='rgba(232,88,10,.15)';ctxS.beginPath();ctxS.arc(cx,cy,9,0,Math.PI*2);ctxS.fill();
-  ctxS.strokeStyle='#e8580a';ctxS.lineWidth=1.5;ctxS.beginPath();ctxS.arc(cx,cy,9,0,Math.PI*2);ctxS.stroke();
-  document.getElementById('h-pts').textContent=scanPts.length;
-  document.getElementById('st-pts').textContent=scanPts.length;
-  document.getElementById('s-info').textContent=scanPts.length+' pts';
-  document.getElementById('st-lz').textContent=v.sc.toFixed(2)+'x';
-}
-
-// ── Draw memory map ───────────────────────────────────────────────────────────
+// ── Draw map ──────────────────────────────────────────────────────────────────
 function drawMap(){
-  const W=cvM.width,H=cvM.height;if(!W||!H)return;
+  const W=cvM.width, H=cvM.height; if(!W||!H) return;
   const v=vM;
-  const img=ctxM.createImageData(W,H),d=img.data;
+  const img=ctxM.createImageData(W,H), d=img.data;
   for(let i=0;i<d.length;i+=4){d[i]=8;d[i+1]=9;d[i+2]=12;d[i+3]=255;}
+
   for(let gy=0;gy<GSIZ;gy++){
     for(let gx=0;gx<GSIZ;gx++){
-      const val=grid[gy*GSIZ+gx];if(!val)continue;
-      const px=Math.round(v.x+(gx-ORIG)*v.sc),py=Math.round(v.y+(gy-ORIG)*v.sc);
+      const val=grid[gy*GSIZ+gx]; if(!val) continue;
+      const px=Math.round(v.x+(gx-ORIG)*v.sc), py=Math.round(v.y+(gy-ORIG)*v.sc);
       const cw=Math.max(1,Math.round(v.sc));
-      if(px+cw<0||px>=W||py+cw<0||py>=H)continue;
+      if(px+cw<0||px>=W||py+cw<0||py>=H) continue;
       let r,g,b;
       if(val>0){const t=Math.min(1,val/80);r=20+Math.round(t*200);g=130+Math.round(t*100);b=255;}
       else{const t=Math.min(1,-val/60);r=0;g=10+15*t|0;b=20+20*t|0;}
@@ -271,31 +195,62 @@ function drawMap(){
     }
   }
   ctxM.putImageData(img,0,0);
+
+  // Grid lines
   const gS=Math.round(2000/GRES);
-  ctxM.strokeStyle='rgba(255,255,255,.025)';ctxM.lineWidth=1;
+  ctxM.strokeStyle='rgba(255,255,255,.025)'; ctxM.lineWidth=1;
   for(let g=-ORIG;g<=ORIG;g+=gS){
-    const sx=v.x+g*v.sc,sy=v.y+g*v.sc;
+    const sx=v.x+g*v.sc, sy=v.y+g*v.sc;
     ctxM.beginPath();ctxM.moveTo(sx,0);ctxM.lineTo(sx,H);ctxM.stroke();
     ctxM.beginPath();ctxM.moveTo(0,sy);ctxM.lineTo(W,sy);ctxM.stroke();
   }
+
+  // Latest scan overlay
+  let nearest=null;
   for(const[ang,dist] of scanPts){
     const rad=(ang-90)*Math.PI/180;
-    const px=v.x+Math.cos(rad)*dist/GRES*v.sc,py=v.y+Math.sin(rad)*dist/GRES*v.sc;
-    ctxM.fillStyle='rgba(251,191,36,.5)';
-    ctxM.beginPath();ctxM.arc(px,py,1.4,0,Math.PI*2);ctxM.fill();
+    const px=v.x+Math.cos(rad)*dist/GRES*v.sc, py=v.y+Math.sin(rad)*dist/GRES*v.sc;
+    ctxM.fillStyle='rgba(251,191,36,.6)';
+    ctxM.beginPath();ctxM.arc(px,py,1.6,0,Math.PI*2);ctxM.fill();
+    if(!nearest||dist<nearest.d) nearest={ang,d:dist};
   }
+
+  // Scale bar
   const bPx=2*1000/GRES*v.sc;
-  ctxM.strokeStyle='#3b82f6';ctxM.lineWidth=1.5;
+  ctxM.strokeStyle='#3b82f6'; ctxM.lineWidth=1.5;
   ctxM.beginPath();ctxM.moveTo(12,H-14);ctxM.lineTo(12+bPx,H-14);ctxM.stroke();
-  ctxM.fillStyle='#3b82f6';ctxM.font='9px monospace';ctxM.textAlign='left';
+  ctxM.fillStyle='#3b82f6'; ctxM.font='9px monospace'; ctxM.textAlign='left';
   ctxM.fillText('2m',12+bPx/2-7,H-4);
+
+  // Robot
   ctxM.fillStyle='rgba(232,88,10,.15)';ctxM.beginPath();ctxM.arc(v.x,v.y,7,0,Math.PI*2);ctxM.fill();
   ctxM.strokeStyle='#e8580a';ctxM.lineWidth=1.5;ctxM.beginPath();ctxM.arc(v.x,v.y,7,0,Math.PI*2);ctxM.stroke();
+
+  // Stats
+  if(nearest){
+    document.getElementById('s-near').innerHTML=(nearest.d/10).toFixed(0)+'<span class="unit">cm</span>';
+    document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/10).toFixed(0)+' cm';
+    document.getElementById('h-near').textContent=(nearest.d/10).toFixed(0)+'cm';
+  }
   document.getElementById('st-sc').textContent=mapScans;
   document.getElementById('h-sc').textContent=mapScans;
   document.getElementById('st-mz').textContent=v.sc.toFixed(2)+'x';
   document.getElementById('m-info').textContent=mapScans+' scans · scroll=zoom · drag=pan';
 }
+
+// ── rAF loop ──────────────────────────────────────────────────────────────────
+let fpsCnt=0, fpsLast=performance.now();
+function loop(){
+  drawMap();
+  fpsCnt++;
+  const now=performance.now();
+  if(now-fpsLast>=1000){
+    document.getElementById('h-fps').textContent=Math.round(fpsCnt*1000/(now-fpsLast));
+    fpsCnt=0; fpsLast=now;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
 
 // ── Gas ───────────────────────────────────────────────────────────────────────
 const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
@@ -317,7 +272,7 @@ function updateGas(co,no2,nh3){
   const cls={normal:'s-n',caution:'s-c',danger:'s-d'};
   for(const[g,l] of Object.entries(lv)){
     const el=document.getElementById(g+'-s');
-    el.className='gst '+cls[l];el.textContent=lbl[l];
+    el.className='gst '+cls[l]; el.textContent=lbl[l];
   }
   const worst=Object.values(lv).includes('danger')?'danger':Object.values(lv).includes('caution')?'caution':'normal';
   const ban=document.getElementById('banner');
@@ -331,21 +286,7 @@ function updateGas(co,no2,nh3){
   }
 }
 
-// ── rAF loop ──────────────────────────────────────────────────────────────────
-let fpsCnt=0,fpsLast=performance.now();
-function loop(){
-  drawScan();drawMap();
-  fpsCnt++;
-  const now=performance.now();
-  if(now-fpsLast>=1000){
-    document.getElementById('h-fps').textContent=Math.round(fpsCnt*1000/(now-fpsLast));
-    fpsCnt=0;fpsLast=now;
-  }
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
-
-// ── Parse lines ───────────────────────────────────────────────────────────────
+// ── Parse ─────────────────────────────────────────────────────────────────────
 function parseLine(line){
   if(line.startsWith('L:')){
     const pts=line.slice(2).split(';').map(p=>{
@@ -356,61 +297,50 @@ function parseLine(line){
     }).filter(([a,d])=>!isNaN(a)&&!isNaN(d)&&d>50&&d<12000);
     if(pts.length){
       scanPts=pts;
-      for(const[a,d] of pts)updateGrid(a,d);
+      for(const[a,d] of pts) updateGrid(a,d);
       mapScans++;
     }
   } else if(line.startsWith('G:')){
     const parts=line.slice(2).split(',');
     const co=parseFloat(parts[0]),no2=parseFloat(parts[1]),nh3=parseFloat(parts[2]);
-    if(!isNaN(co))updateGas(co,no2,nh3);
+    if(!isNaN(co)) updateGas(co,no2,nh3);
   }
 }
 
 // ── WebSerial ─────────────────────────────────────────────────────────────────
-let port=null,running=false;
+let port=null, running=false;
 function setOnline(on){
   const badge=document.getElementById('badge');
   const wss=document.getElementById('ws-status');
-  if(on){
-    badge.textContent='LIVE';badge.className='pill p-live';
-    wss.textContent='connected';wss.style.color='#4ade80';
-    document.getElementById('s-info').textContent='connected — waiting for data…';
-  } else {
-    badge.textContent='OFFLINE';badge.className='pill p-off';
-    wss.textContent='click Connect Serial';wss.style.color='';
-    document.getElementById('s-info').textContent='not connected';
-  }
+  if(on){badge.textContent='LIVE';badge.className='pill p-live';wss.textContent='connected';wss.style.color='#4ade80';}
+  else{badge.textContent='OFFLINE';badge.className='pill p-off';wss.textContent='click Connect Serial';wss.style.color='';}
 }
 async function doConnect(){
   if(!('serial' in navigator)){alert('Use Chrome or Edge — WebSerial not supported in this browser.');return;}
   try{
     port=await navigator.serial.requestPort();
     await port.open({baudRate:115200});
-    running=true;
-    setOnline(true);
-    readLoop();
+    running=true; setOnline(true); readLoop();
   }catch(e){if(e.name!=='NotFoundError')alert('Connection failed: '+e.message);}
 }
 async function doDisconnect(){
   running=false;
   try{await port?.readable?.cancel();}catch{}
   try{await port?.close();}catch{}
-  port=null;
-  setOnline(false);
-  document.getElementById('btnC').textContent='Connect Serial';
+  port=null; setOnline(false);
 }
 async function readLoop(){
-  const dec=new TextDecoder();let buf='';
+  const dec=new TextDecoder(); let buf='';
   const reader=port.readable.getReader();
   try{
     while(running){
-      const{value,done}=await reader.read();if(done)break;
+      const{value,done}=await reader.read(); if(done) break;
       buf+=dec.decode(value,{stream:true});
       buf=buf.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-      const last=buf.lastIndexOf('\n');if(last===-1)continue;
-      const block=buf.slice(0,last);buf=buf.slice(last+1);
+      const last=buf.lastIndexOf('\n'); if(last===-1) continue;
+      const block=buf.slice(0,last); buf=buf.slice(last+1);
       for(const raw of block.split('\n')){const l=raw.trim();if(l)parseLine(l);}
-      if(buf.length>16000)buf='';
+      if(buf.length>16000) buf='';
     }
   }catch(e){if(running)console.error(e);}
   finally{reader.releaseLock();setOnline(false);}
