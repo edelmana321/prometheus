@@ -316,11 +316,31 @@ requestAnimationFrame(loop);
 // ── Gas ───────────────────────────────────────────────────────────────────────
 const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
 let gasMax={co:1,no2:.01,nh3:1};
+let lastGas=[null,null,null];
+
+function setGasStatus(state){
+  const lbl=state==='warming'?'Warming up…':'Calibrated';
+  const cls=state==='warming'?'s-c':'s-n';
+  ['co','no2','nh3'].forEach(g=>{
+    const el=document.getElementById(g+'-s');
+    el.className='gst '+cls; el.textContent=lbl;
+    if(state==='warming'){
+      document.getElementById(g+'-v').innerHTML='—<span class="gc-unit">ppm</span>';
+      document.getElementById(g+'-f').style.width='0%';
+    }
+  });
+}
+
 function glv(val,k){return val>=THR[k].d?'danger':val>=THR[k].c?'caution':'normal';}
+
 function updateGas(co,no2,nh3){
-  gasMax.co=Math.max(gasMax.co,co*1.05+.01);
-  gasMax.no2=Math.max(gasMax.no2,no2*1.05+.0001);
-  gasMax.nh3=Math.max(gasMax.nh3,nh3*1.05+.01);
+  // Reject unchanged readings (sensor frozen / not ready)
+  if(lastGas[0]===co&&lastGas[1]===no2&&lastGas[2]===nh3) return;
+  lastGas=[co,no2,nh3];
+
+  gasMax.co=Math.max(gasMax.co,co*1.1+.5);
+  gasMax.no2=Math.max(gasMax.no2,no2*1.1+.005);
+  gasMax.nh3=Math.max(gasMax.nh3,nh3*1.1+.5);
   const pct=(val,m)=>Math.min(100,val/m*100).toFixed(1)+'%';
   document.getElementById('co-v').innerHTML=co.toFixed(2)+'<span class="gc-unit">ppm</span>';
   document.getElementById('no2-v').innerHTML=no2.toFixed(4)+'<span class="gc-unit">ppm</span>';
@@ -362,8 +382,15 @@ function parseLine(line){
       wallDirty=true;
     }
   } else if(line.startsWith('G:')){
-    const[co,no2,nh3]=line.slice(2).split(',').map(Number);
-    if(!isNaN(co)) updateGas(co,no2,nh3);
+    const val=line.slice(2);
+    if(val==='warmup'){
+      setGasStatus('warming');
+    } else if(val==='ready'){
+      setGasStatus('ready');
+    } else {
+      const[co,no2,nh3]=val.split(',').map(Number);
+      if(!isNaN(co)) updateGas(co,no2,nh3);
+    }
   }
 }
 
