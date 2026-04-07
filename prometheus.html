@@ -72,6 +72,8 @@ canvas:active{cursor:grabbing}
   <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div class="hstat">Scans <b id="h-sc">0</b></div>
   <div id="sp"></div>
+  <button class="hbtn hi" id="btnC" onclick="doConnect()">Connect Serial</button>
+  <button class="hbtn" onclick="doDisconnect()">Disconnect</button>
   <button class="hbtn" onclick="clearGrid()">Clear map</button>
   <button class="hbtn" onclick="resetViews()">Reset views</button>
 </div>
@@ -364,29 +366,55 @@ function parseLine(line){
   }
 }
 
-// ── WebSocket (auto-connect, auto-retry) ──────────────────────────────────────
-let ws=null;
+// ── WebSerial ─────────────────────────────────────────────────────────────────
+let port=null,running=false;
 function setOnline(on){
   const badge=document.getElementById('badge');
   const wss=document.getElementById('ws-status');
   if(on){
     badge.textContent='LIVE';badge.className='pill p-live';
-    wss.textContent='bridge connected';wss.style.color='#4ade80';
+    wss.textContent='connected';wss.style.color='#4ade80';
     document.getElementById('s-info').textContent='connected — waiting for data…';
   } else {
     badge.textContent='OFFLINE';badge.className='pill p-off';
-    wss.textContent='run prometheus_bridge.py to connect';wss.style.color='';
+    wss.textContent='click Connect Serial';wss.style.color='';
     document.getElementById('s-info').textContent='not connected';
   }
 }
-function connectWS(){
-  ws=new WebSocket('ws://localhost:8765');
-  ws.onopen=()=>setOnline(true);
-  ws.onmessage=e=>parseLine(e.data.trim());
-  ws.onclose=()=>{setOnline(false);setTimeout(connectWS,3000);};
-  ws.onerror=()=>{};
+async function doConnect(){
+  if(!('serial' in navigator)){alert('Use Chrome or Edge — WebSerial not supported in this browser.');return;}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    running=true;
+    setOnline(true);
+    readLoop();
+  }catch(e){if(e.name!=='NotFoundError')alert('Connection failed: '+e.message);}
 }
-connectWS();
+async function doDisconnect(){
+  running=false;
+  try{await port?.readable?.cancel();}catch{}
+  try{await port?.close();}catch{}
+  port=null;
+  setOnline(false);
+  document.getElementById('btnC').textContent='Connect Serial';
+}
+async function readLoop(){
+  const dec=new TextDecoder();let buf='';
+  const reader=port.readable.getReader();
+  try{
+    while(running){
+      const{value,done}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      buf=buf.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+      const last=buf.lastIndexOf('\n');if(last===-1)continue;
+      const block=buf.slice(0,last);buf=buf.slice(last+1);
+      for(const raw of block.split('\n')){const l=raw.trim();if(l)parseLine(l);}
+      if(buf.length>16000)buf='';
+    }
+  }catch(e){if(running)console.error(e);}
+  finally{reader.releaseLock();setOnline(false);}
+}
 </script>
 </body>
 </html>
