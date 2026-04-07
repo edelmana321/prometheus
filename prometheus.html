@@ -159,6 +159,31 @@ function updateGrid(ang,dist){
   }
 }
 
+// ── Offscreen grid canvas ─────────────────────────────────────────────────────
+const offscreen=document.createElement('canvas');
+const octx=offscreen.getContext('2d');
+let gridDirty=false;
+
+function rebuildGridCanvas(){
+  offscreen.width=GSIZ; offscreen.height=GSIZ;
+  const img=octx.createImageData(GSIZ,GSIZ), d=img.data;
+  for(let i=0;i<d.length;i+=4){d[i]=8;d[i+1]=9;d[i+2]=12;d[i+3]=255;}
+  for(let gy=1;gy<GSIZ-1;gy++){
+    for(let gx=1;gx<GSIZ-1;gx++){
+      const val=grid[gy*GSIZ+gx];
+      if(val<=0) continue;
+      const adj=[grid[(gy-1)*GSIZ+gx],grid[(gy+1)*GSIZ+gx],grid[gy*GSIZ+gx-1],grid[gy*GSIZ+gx+1]];
+      if(!adj.some(a=>a<10)) continue;
+      const t=Math.min(1,val/WALL_MAX);
+      const i=(gy*GSIZ+gx)*4;
+      d[i]=20+Math.round(t*200); d[i+1]=Math.round(160+t*80); d[i+2]=Math.round(200+t*55);
+      d[i+3]=Math.round((0.55+t*0.45)*255);
+    }
+  }
+  octx.putImageData(img,0,0);
+  gridDirty=false;
+}
+
 // ── Canvas resize ─────────────────────────────────────────────────────────────
 function resizeAll(){
   const p=cvM.parentElement;
@@ -186,22 +211,7 @@ cvM.addEventListener('mousedown',e=>{drag=true;dsx=e.clientX;dsy=e.clientY;dox=v
 window.addEventListener('mousemove',e=>{if(!drag)return;v.x=dox+(e.clientX-dsx);v.y=doy+(e.clientY-dsy);});
 window.addEventListener('mouseup',()=>drag=false);
 
-// ── Smooth wall contour extraction ────────────────────────────────────────────
-function getWallEdges(){
-  const edges=[];
-  for(let gy=1;gy<GSIZ-1;gy++){
-    for(let gx=1;gx<GSIZ-1;gx++){
-      const val=grid[gy*GSIZ+gx];
-      if(val<10) continue;
-      const adj=[grid[(gy-1)*GSIZ+gx],grid[(gy+1)*GSIZ+gx],grid[gy*GSIZ+gx-1],grid[gy*GSIZ+gx+1]];
-      if(adj.some(a=>a<10)) edges.push([gx,gy,Math.min(1,val/WALL_MAX)]);
-    }
-  }
-  return edges;
-}
-
 // ── Draw ──────────────────────────────────────────────────────────────────────
-let lastEdges=[], edgeTimer=0;
 
 function drawMap(){
   const W=cvM.width, H=cvM.height; if(!W||!H) return;
@@ -225,41 +235,34 @@ function drawMap(){
     if(r>30) ctxM.fillText(Math.round(m*3.281)+'ft',v.x+4,v.y-r+9);
   }
 
-  // Free space — flood-fill from robot origin each frame (capped for perf)
-  const freeSet=new Uint8Array(GSIZ*GSIZ);
-  const queue=[];
-  const startGx=ORIG, startGy=ORIG;
-  freeSet[startGy*GSIZ+startGx]=1; queue.push(startGx,startGy);
-  let qi=0, visited=0, maxVisit=18000;
-  while(qi<queue.length&&visited<maxVisit){
-    const gx=queue[qi++], gy=queue[qi++]; visited++;
-    const px=Math.round(v.x+(gx-ORIG)*v.sc), py=Math.round(v.y+(gy-ORIG)*v.sc);
-    const cw=Math.max(1,Math.ceil(v.sc));
-    if(px<W&&px+cw>0&&py<H&&py+cw>0){
-      ctxM.fillStyle='rgba(30,90,160,0.13)';
-      ctxM.fillRect(Math.max(0,px),Math.max(0,py),Math.min(cw,W-px),Math.min(cw,H-py));
+  // Free space — filled polygon from sorted scan points back to robot
+  if(scanPts.length>2){
+    const sorted=[...scanPts].sort((a,b)=>a[0]-b[0]);
+    ctxM.beginPath();
+    ctxM.moveTo(v.x,v.y);
+    for(const[ang,dist] of sorted){
+      const rad=(ang-90)*Math.PI/180;
+      const px=v.x+Math.cos(rad)*dist/GRES*v.sc;
+      const py=v.y+Math.sin(rad)*dist/GRES*v.sc;
+      ctxM.lineTo(px,py);
     }
-    const nb=[[gx-1,gy],[gx+1,gy],[gx,gy-1],[gx,gy+1]];
-    for(const[nx,ny] of nb){
-      if(nx<0||nx>=GSIZ||ny<0||ny>=GSIZ) continue;
-      const ni=ny*GSIZ+nx;
-      if(freeSet[ni]) continue;
-      if(grid[ni]>=8) continue;
-      freeSet[ni]=1; queue.push(nx,ny);
-    }
+    ctxM.closePath();
+    ctxM.fillStyle='rgba(40,100,200,0.10)';
+    ctxM.fill();
+    ctxM.strokeStyle='rgba(60,130,255,0.18)';
+    ctxM.lineWidth=1;
+    ctxM.stroke();
   }
 
-  // Wall cells — rendered as smooth filled shapes
-  if(Date.now()-edgeTimer>80){lastEdges=getWallEdges();edgeTimer=Date.now();}
-  for(const[gx,gy,t] of lastEdges){
-    const px=Math.round(v.x+(gx-ORIG)*v.sc), py=Math.round(v.y+(gy-ORIG)*v.sc);
-    const cw=Math.max(1.5,Math.ceil(v.sc*1.1));
-    if(px>=W||px+cw<0||py>=H||py+cw<0) continue;
-    const alpha=0.55+t*0.45;
-    const blue=Math.round(200+t*55);
-    const green=Math.round(160+t*80);
-    ctxM.fillStyle=`rgba(30,${green},${blue},${alpha})`;
-    ctxM.fillRect(Math.max(0,px),Math.max(0,py),Math.min(cw,W-px),Math.min(cw,H-py));
+  // Blit offscreen grid (rebuild only when new scan arrives)
+  if(gridDirty) rebuildGridCanvas();
+  if(offscreen.width>0){
+    ctxM.save();
+    ctxM.translate(v.x-ORIG*v.sc, v.y-ORIG*v.sc);
+    ctxM.scale(v.sc, v.sc);
+    ctxM.imageSmoothingEnabled=false;
+    ctxM.drawImage(offscreen,0,0);
+    ctxM.restore();
   }
 
   // Direction line (forward = 0°, pointing up from robot)
@@ -369,6 +372,7 @@ function parseLine(line){
       scanPts=pts;
       for(const[a,d] of pts) updateGrid(a,d);
       mapScans++;
+      gridDirty=true;
     }
   } else if(line.startsWith('G:')){
     const[co,no2,nh3]=line.slice(2).split(',').map(Number);
