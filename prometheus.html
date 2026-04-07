@@ -222,22 +222,30 @@ function drawMap(){
     const r=m*1000/GRES*v.sc;
     ctxM.strokeStyle='rgba(255,255,255,0.035)'; ctxM.lineWidth=1;
     ctxM.beginPath(); ctxM.arc(v.x,v.y,r,0,Math.PI*2); ctxM.stroke();
-    if(r>30) ctxM.fillText(m+'m',v.x+4,v.y-r+9);
+    if(r>30) ctxM.fillText(Math.round(m*3.281)+'ft',v.x+4,v.y-r+9);
   }
 
-  // Free space (very subtle blue tint for explored areas)
-  for(let gy=0;gy<GSIZ;gy++){
-    for(let gx=0;gx<GSIZ;gx++){
-      const val=grid[gy*GSIZ+gx];
-      if(val>=-5&&val<10) continue;
-      if(val<-5){
-        const px=Math.round(v.x+(gx-ORIG)*v.sc), py=Math.round(v.y+(gy-ORIG)*v.sc);
-        const cw=Math.max(1,Math.ceil(v.sc));
-        if(px>=W||px+cw<0||py>=H||py+cw<0) continue;
-        const t=Math.min(1,-val/WALL_MIN)*0.06;
-        ctxM.fillStyle=`rgba(30,60,120,${t})`;
-        ctxM.fillRect(Math.max(0,px),Math.max(0,py),Math.min(cw,W-px),Math.min(cw,H-py));
-      }
+  // Free space — flood-fill from robot origin each frame (capped for perf)
+  const freeSet=new Uint8Array(GSIZ*GSIZ);
+  const queue=[];
+  const startGx=ORIG, startGy=ORIG;
+  freeSet[startGy*GSIZ+startGx]=1; queue.push(startGx,startGy);
+  let qi=0, visited=0, maxVisit=18000;
+  while(qi<queue.length&&visited<maxVisit){
+    const gx=queue[qi++], gy=queue[qi++]; visited++;
+    const px=Math.round(v.x+(gx-ORIG)*v.sc), py=Math.round(v.y+(gy-ORIG)*v.sc);
+    const cw=Math.max(1,Math.ceil(v.sc));
+    if(px<W&&px+cw>0&&py<H&&py+cw>0){
+      ctxM.fillStyle='rgba(30,90,160,0.13)';
+      ctxM.fillRect(Math.max(0,px),Math.max(0,py),Math.min(cw,W-px),Math.min(cw,H-py));
+    }
+    const nb=[[gx-1,gy],[gx+1,gy],[gx,gy-1],[gx,gy+1]];
+    for(const[nx,ny] of nb){
+      if(nx<0||nx>=GSIZ||ny<0||ny>=GSIZ) continue;
+      const ni=ny*GSIZ+nx;
+      if(freeSet[ni]) continue;
+      if(grid[ni]>=8) continue;
+      freeSet[ni]=1; queue.push(nx,ny);
     }
   }
 
@@ -277,7 +285,7 @@ function drawMap(){
   ctxM.beginPath(); ctxM.moveTo(14,H-10); ctxM.lineTo(14,H-16); ctxM.stroke();
   ctxM.beginPath(); ctxM.moveTo(14+bPx,H-10); ctxM.lineTo(14+bPx,H-16); ctxM.stroke();
   ctxM.fillStyle='rgba(100,120,200,0.7)'; ctxM.font='9px monospace'; ctxM.textAlign='center';
-  ctxM.fillText(barM+'m',14+bPx/2,H-4);
+  ctxM.fillText(Math.round(barM*3.281)+'ft',14+bPx/2,H-4);
 
   // Nearest marker
   let nearest=null;
@@ -289,9 +297,9 @@ function drawMap(){
     ctxM.strokeStyle='rgba(232,88,10,0.3)'; ctxM.lineWidth=1; ctxM.setLineDash([2,4]);
     ctxM.beginPath(); ctxM.moveTo(v.x,v.y); ctxM.lineTo(px,py); ctxM.stroke();
     ctxM.setLineDash([]);
-    document.getElementById('s-near').innerHTML=(nearest.d/10).toFixed(0)+'<span class="unit">cm</span>';
-    document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/10).toFixed(0)+' cm';
-    document.getElementById('h-near').textContent=(nearest.d/10).toFixed(0)+'cm';
+    document.getElementById('s-near').innerHTML=(nearest.d/304.8).toFixed(1)+'<span class="unit">ft</span>';
+    document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/304.8).toFixed(1)+' ft';
+    document.getElementById('h-near').textContent=(nearest.d/304.8).toFixed(1)+'ft';
   }
 
   document.getElementById('st-sc').textContent=mapScans;
