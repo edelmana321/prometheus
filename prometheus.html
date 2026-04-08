@@ -391,7 +391,11 @@ function parseLine(line){
 }
 
 // ── WebSocket auto-connect to Pico AP ─────────────────────────────────────────
-const PICO_WS='ws://192.168.4.1:8765';
+// Connect to Pico WS — works whether loaded from GitHub (https) or Pico (http)
+const PICO_WS = location.protocol === 'https:'
+  ? 'ws://192.168.4.1:8765'   // loaded from GitHub, browser may block — see below
+  : 'ws://192.168.4.1:8765';  // loaded via Pico redirect, always works
+
 let ws=null;
 function setStatus(state,msg){
   const b=document.getElementById('badge'),s=document.getElementById('ws-status');
