@@ -19,7 +19,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 #sp{flex:1}
 .hbtn{padding:4px 11px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:5px;cursor:pointer;font-size:11px;transition:border-color .15s,color .15s}
 .hbtn:hover{border-color:var(--accent);color:var(--accent)}
-.hbtn.hi{border-color:var(--accent);color:var(--accent)}
 #warmup-bar{display:none;padding:5px 16px;background:#0d0e14;border-bottom:1px solid var(--border);align-items:center;gap:12px;flex-shrink:0}
 #warmup-bar.show{display:flex}
 #wu-label{font-size:11px;color:#fbbf24;white-space:nowrap;min-width:200px}
@@ -58,22 +57,6 @@ canvas#cvM:active{cursor:grabbing}
 .sk{font-size:10px;color:var(--muted)}.sv{font-size:10px;font-family:monospace;color:var(--text)}
 .clrbtn{width:100%;padding:5px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;transition:all .15s}
 .clrbtn:hover{border-color:#f87171;color:#f87171}
-#cal-overlay{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.75);z-index:100;align-items:center;justify-content:center}
-#cal-overlay.open{display:flex}
-#cal-box{background:#0d0e14;border:1px solid #1e2238;border-radius:8px;padding:22px 24px;width:330px;display:flex;flex-direction:column;gap:14px}
-#cal-box h2{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.05em}
-#cal-box p{font-size:11px;color:#4a5070;line-height:1.7}
-.cal-row{display:flex;flex-direction:column;gap:4px}
-.cal-row label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
-.cal-row input{background:#08090c;border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-family:monospace;padding:6px 8px;width:100%;outline:none}
-.cal-row input:focus{border-color:var(--accent)}
-.cal-live{font-size:10px;font-family:monospace;color:var(--muted);background:#08090c;border:1px solid var(--border);border-radius:4px;padding:8px 10px;line-height:2}
-.cal-live b{color:#4ade80}
-.cal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:2px}
-.cal-btns button{padding:5px 14px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;transition:all .15s}
-.cal-btns button:hover{border-color:var(--accent);color:var(--accent)}
-.cal-btns button.primary{border-color:var(--accent);color:var(--accent)}
-.cal-btns button.primary:hover{background:var(--accent);color:#08090c}
 </style>
 </head>
 <body>
@@ -89,14 +72,12 @@ canvas#cvM:active{cursor:grabbing}
   </div>
   <div class="sep"></div>
   <span class="pill p-off" id="badge">OFFLINE</span>
-  <span id="ws-status" style="font-size:10px;color:var(--muted);font-family:monospace">connecting to Prometheus WiFi…</span>
   <div class="hstat">Near <b id="h-near">—</b></div>
   <div class="hstat">Scans <b id="h-sc">0</b></div>
   <div class="hstat">FPS <b id="h-fps">—</b></div>
   <div id="sp"></div>
   <button class="hbtn" onclick="clearAll()">Clear</button>
   <button class="hbtn" onclick="resetView()">Reset view</button>
-  <button class="hbtn" onclick="openCal()">Calibrate gas</button>
 </div>
 <div id="warmup-bar">
   <span id="wu-label">Sensor warming up…</span>
@@ -104,24 +85,9 @@ canvas#cvM:active{cursor:grabbing}
   <span id="wu-time">3:00</span>
 </div>
 <div id="banner"></div>
-<div id="cal-overlay">
-  <div id="cal-box">
-    <h2>Gas sensor calibration</h2>
-    <p>Place the sensor in clean ambient air and hit "Use current Rs" to set R0 to the room baseline. Values are saved in your browser.</p>
-    <div class="cal-live">CO Rs &nbsp;&nbsp;<b id="cl-co">—</b> Ω<br>NO₂ Rs &nbsp;<b id="cl-no2">—</b> Ω<br>NH₃ Rs &nbsp;<b id="cl-nh3">—</b> Ω</div>
-    <div class="cal-row"><label>R0 CO (Ω)</label><input id="r0-co" type="number" min="1"></div>
-    <div class="cal-row"><label>R0 NO₂ (Ω)</label><input id="r0-no2" type="number" min="1"></div>
-    <div class="cal-row"><label>R0 NH₃ (Ω)</label><input id="r0-nh3" type="number" min="1"></div>
-    <div class="cal-btns">
-      <button onclick="useCurrentRs()">Use current Rs</button>
-      <button onclick="closeCal()">Cancel</button>
-      <button class="primary" onclick="saveCal()">Save</button>
-    </div>
-  </div>
-</div>
 <div id="body">
   <div class="pane">
-    <div class="ptitle">Smart map — AI SLAM<em id="m-info">scroll=zoom · drag=pan</em></div>
+    <div class="ptitle">Smart map<em id="m-info">scroll=zoom · drag=pan</em></div>
     <canvas id="cvM"></canvas>
   </div>
   <div id="sb">
@@ -161,51 +127,38 @@ canvas#cvM:active{cursor:grabbing}
 </div>
 </div>
 <script>
-const cvM=document.getElementById('cvM'), ctxM=cvM.getContext('2d');
-
-// ── Occupancy grid ────────────────────────────────────────────────────────────
-const GRES=30, GSIZ=600, ORIG=GSIZ/2;
+const GRES=30,GSIZ=600,ORIG=GSIZ/2;
 const grid=new Float32Array(GSIZ*GSIZ);
-const WALL_HIT=5, WALL_MISS=-0.8, WALL_MAX=60;
-let mapScans=0, scanPts=[];
-let pose={x:0,y:0,heading:0}, poseHistory=[{x:0,y:0}];
-
+let mapScans=0,scanPts=[];
 const wallCanvas=document.createElement('canvas');
-wallCanvas.width=GSIZ; wallCanvas.height=GSIZ;
+wallCanvas.width=GSIZ;wallCanvas.height=GSIZ;
 const wctx=wallCanvas.getContext('2d');
 let wallDirty=false;
 
 function clearAll(){
-  grid.fill(0); mapScans=0; scanPts=[];
-  pose={x:0,y:0,heading:0}; poseHistory=[{x:0,y:0}];
-  wctx.clearRect(0,0,GSIZ,GSIZ); wallDirty=false;
+  grid.fill(0);mapScans=0;scanPts=[];
+  wctx.clearRect(0,0,GSIZ,GSIZ);wallDirty=false;
   document.getElementById('st-sc').textContent='0';
   document.getElementById('h-sc').textContent='0';
 }
 
-function localToWorld(ang,dist){
-  const rad=(ang+pose.heading)*Math.PI/180;
-  return{x:pose.x+Math.cos(rad)*dist, y:pose.y+Math.sin(rad)*dist};
-}
-function worldToGrid(wx,wy){
-  return{gx:Math.round(wx/GRES+ORIG), gy:Math.round(wy/GRES+ORIG)};
-}
-function updateGrid(wx,wy,rx,ry){
-  const{gx:gex,gy:gey}=worldToGrid(wx,wy);
-  const{gx:sx,gy:sy}=worldToGrid(rx,ry);
-  let x=sx,y=sy;
+function updateGrid(ang,dist){
+  const rad=(ang-90)*Math.PI/180;
+  const gex=Math.round(Math.cos(rad)*dist/GRES+ORIG);
+  const gey=Math.round(Math.sin(rad)*dist/GRES+ORIG);
+  let x=ORIG|0,y=ORIG|0;
   const dx=Math.abs(gex-x),dy=Math.abs(gey-y);
-  const stepx=x<gex?1:-1,stepy=y<gey?1:-1;
+  const sx=x<gex?1:-1,sy=y<gey?1:-1;
   let err=dx-dy,steps=0,max=dx+dy+2;
   while(steps++<max){
     if(x===gex&&y===gey)break;
-    if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){const i=y*GSIZ+x;grid[i]=Math.max(-40,grid[i]+WALL_MISS);}
+    if(x>=0&&x<GSIZ&&y>=0&&y<GSIZ){const i=y*GSIZ+x;grid[i]=Math.max(-40,grid[i]-0.8);}
     const e2=2*err;
-    if(e2>-dy){err-=dy;x+=stepx;}
-    if(e2<dx){err+=dx;y+=stepy;}
+    if(e2>-dy){err-=dy;x+=sx;}
+    if(e2<dx){err+=dx;y+=sy;}
   }
   if(gex>=0&&gex<GSIZ&&gey>=0&&gey<GSIZ)
-    grid[gey*GSIZ+gex]=Math.min(WALL_MAX,grid[gey*GSIZ+gex]+WALL_HIT);
+    grid[gey*GSIZ+gex]=Math.min(60,grid[gey*GSIZ+gex]+5);
 }
 
 function rebuildWallCanvas(){
@@ -213,7 +166,7 @@ function rebuildWallCanvas(){
   for(let gy=1;gy<GSIZ-1;gy++){
     for(let gx=1;gx<GSIZ-1;gx++){
       const val=grid[gy*GSIZ+gx];if(val<8)continue;
-      const t=Math.min(1,val/WALL_MAX),i=(gy*GSIZ+gx)*4;
+      const t=Math.min(1,val/60),i=(gy*GSIZ+gx)*4;
       d[i]=Math.round(20+t*30);d[i+1]=Math.round(140+t*100);
       d[i+2]=Math.round(210+t*45);d[i+3]=Math.round(180+t*75);
     }
@@ -221,34 +174,24 @@ function rebuildWallCanvas(){
   wctx.putImageData(img,0,0);wallDirty=false;
 }
 
-let prevScanWorld=[];
-function matchAndUpdatePose(pts){
-  if(prevScanWorld.length<10||pts.length<10)return;
-  const newWorld=pts.map(([a,d])=>localToWorld(a,d));
-  let dx=0,dy=0,count=0;
-  for(const np of newWorld){
-    let best=null,bestD=Infinity;
-    for(const pp of prevScanWorld){const dd=(np.x-pp.x)**2+(np.y-pp.y)**2;if(dd<bestD){bestD=dd;best=pp;}}
-    if(best&&bestD<40000){dx+=best.x-np.x;dy+=best.y-np.y;count++;}
-  }
-  if(count>5){pose.x+=dx/count*0.3;pose.y+=dy/count*0.3;}
-}
-
-// ── Canvas / view ─────────────────────────────────────────────────────────────
+const cvM=document.getElementById('cvM'),ctxM=cvM.getContext('2d');
 function resizeAll(){const p=cvM.parentElement;cvM.width=p.clientWidth;cvM.height=p.clientHeight-28;}
 window.addEventListener('resize',resizeAll);setTimeout(resizeAll,40);
 const v={x:0,y:0,sc:1};
 function resetView(){v.x=cvM.width/2;v.y=cvM.height/2;v.sc=1;}
 setTimeout(resetView,60);
 let drag=false,dsx=0,dsy=0,dox=0,doy=0;
-cvM.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY<0?1.12:.89;const r=cvM.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;v.x=mx+(v.x-mx)*f;v.y=my+(v.y-my)*f;v.sc=Math.max(.05,Math.min(25,v.sc*f));},{passive:false});
+cvM.addEventListener('wheel',e=>{
+  e.preventDefault();const f=e.deltaY<0?1.12:.89;
+  const r=cvM.getBoundingClientRect();
+  const mx=e.clientX-r.left,my=e.clientY-r.top;
+  v.x=mx+(v.x-mx)*f;v.y=my+(v.y-my)*f;
+  v.sc=Math.max(.05,Math.min(25,v.sc*f));
+},{passive:false});
 cvM.addEventListener('mousedown',e=>{drag=true;dsx=e.clientX;dsy=e.clientY;dox=v.x;doy=v.y;});
 window.addEventListener('mousemove',e=>{if(!drag)return;v.x=dox+(e.clientX-dsx);v.y=doy+(e.clientY-dsy);});
 window.addEventListener('mouseup',()=>drag=false);
 
-function w2s(wx,wy){const{gx,gy}=worldToGrid(wx,wy);return{px:v.x+(gx-ORIG)*v.sc,py:v.y+(gy-ORIG)*v.sc};}
-
-// ── Draw ──────────────────────────────────────────────────────────────────────
 function drawMap(){
   const W=cvM.width,H=cvM.height;if(!W||!H)return;
   ctxM.fillStyle='#08090c';ctxM.fillRect(0,0,W,H);
@@ -259,37 +202,36 @@ function drawMap(){
     for(let x=ox;x<W;x+=gStep){ctxM.beginPath();ctxM.moveTo(x,0);ctxM.lineTo(x,H);ctxM.stroke();}
     for(let y=oy;y<H;y+=gStep){ctxM.beginPath();ctxM.moveTo(0,y);ctxM.lineTo(W,y);ctxM.stroke();}
   }
-  const robS=w2s(pose.x,pose.y);
   ctxM.font='9px monospace';ctxM.textAlign='left';
   for(let m=1;m<=10;m++){
     const r=m*1000/GRES*v.sc;if(r<20||r>Math.max(W,H))continue;
-    ctxM.strokeStyle='rgba(255,255,255,0.04)';ctxM.lineWidth=1;
-    ctxM.beginPath();ctxM.arc(robS.px,robS.py,r,0,Math.PI*2);ctxM.stroke();
-    ctxM.fillStyle='#252a40';ctxM.fillText(Math.round(m*3.281)+'ft',robS.px+r+3,robS.py+3);
+    ctxM.strokeStyle='rgba(255,255,255,0.035)';ctxM.lineWidth=1;
+    ctxM.beginPath();ctxM.arc(v.x,v.y,r,0,Math.PI*2);ctxM.stroke();
+    ctxM.fillStyle='#252a40';ctxM.fillText(Math.round(m*3.281)+'ft',v.x+r+3,v.y+3);
   }
   if(scanPts.length>2){
     const sorted=[...scanPts].sort((a,b)=>a[0]-b[0]);
-    ctxM.beginPath();ctxM.moveTo(robS.px,robS.py);
-    for(const[ang,dist]of sorted){const wp=localToWorld(ang,dist);const s=w2s(wp.x,wp.y);ctxM.lineTo(s.px,s.py);}
+    ctxM.beginPath();ctxM.moveTo(v.x,v.y);
+    for(const[ang,dist] of sorted){
+      const rad=(ang-90)*Math.PI/180;
+      ctxM.lineTo(v.x+Math.cos(rad)*dist/GRES*v.sc,v.y+Math.sin(rad)*dist/GRES*v.sc);
+    }
     ctxM.closePath();ctxM.fillStyle='rgba(30,80,160,0.12)';ctxM.fill();
     ctxM.strokeStyle='rgba(50,110,220,0.16)';ctxM.lineWidth=1;ctxM.stroke();
   }
   if(wallDirty)rebuildWallCanvas();
   ctxM.save();ctxM.translate(v.x-ORIG*v.sc,v.y-ORIG*v.sc);ctxM.scale(v.sc,v.sc);
   ctxM.imageSmoothingEnabled=v.sc<2;ctxM.drawImage(wallCanvas,0,0);ctxM.restore();
-  if(poseHistory.length>1){
-    ctxM.strokeStyle='rgba(232,88,10,0.25)';ctxM.lineWidth=1.5;ctxM.beginPath();
-    poseHistory.forEach((p,i)=>{const s=w2s(p.x,p.y);i===0?ctxM.moveTo(s.px,s.py):ctxM.lineTo(s.px,s.py);});
-    ctxM.stroke();
-  }
-  const headRad=(pose.heading-90)*Math.PI/180,dirLen=60*v.sc+40;
+  const dirLen=60*v.sc+40;
   ctxM.strokeStyle='rgba(232,88,10,0.55)';ctxM.lineWidth=1.5;ctxM.setLineDash([4,5]);
-  ctxM.beginPath();ctxM.moveTo(robS.px,robS.py);ctxM.lineTo(robS.px+Math.cos(headRad)*dirLen,robS.py+Math.sin(headRad)*dirLen);ctxM.stroke();
-  ctxM.setLineDash([]);ctxM.fillStyle='rgba(232,88,10,0.5)';ctxM.font='9px monospace';ctxM.textAlign='center';
-  ctxM.fillText('0°',robS.px+Math.cos(headRad)*dirLen,robS.py+Math.sin(headRad)*dirLen-5);
-  ctxM.beginPath();ctxM.arc(robS.px,robS.py,9,0,Math.PI*2);ctxM.fillStyle='rgba(232,88,10,0.1)';ctxM.fill();
+  ctxM.beginPath();ctxM.moveTo(v.x,v.y);ctxM.lineTo(v.x,v.y-dirLen);ctxM.stroke();
+  ctxM.setLineDash([]);
+  ctxM.fillStyle='rgba(232,88,10,0.5)';ctxM.font='9px monospace';ctxM.textAlign='center';
+  ctxM.fillText('0°',v.x,v.y-dirLen-5);
+  ctxM.beginPath();ctxM.arc(v.x,v.y,9,0,Math.PI*2);
+  ctxM.fillStyle='rgba(232,88,10,0.1)';ctxM.fill();
   ctxM.strokeStyle='#e8580a';ctxM.lineWidth=1.5;ctxM.stroke();
-  ctxM.beginPath();ctxM.arc(robS.px,robS.py,3,0,Math.PI*2);ctxM.fillStyle='#e8580a';ctxM.fill();
+  ctxM.beginPath();ctxM.arc(v.x,v.y,3,0,Math.PI*2);ctxM.fillStyle='#e8580a';ctxM.fill();
   const barM=v.sc*1000/GRES>=50?2:1,bPx=barM*1000/GRES*v.sc;
   ctxM.strokeStyle='rgba(100,130,210,0.55)';ctxM.lineWidth=1.5;
   ctxM.beginPath();ctxM.moveTo(14,H-13);ctxM.lineTo(14+bPx,H-13);ctxM.stroke();
@@ -298,11 +240,12 @@ function drawMap(){
   ctxM.fillStyle='rgba(100,130,210,0.65)';ctxM.font='9px monospace';ctxM.textAlign='center';
   ctxM.fillText(Math.round(barM*3.281)+'ft',14+bPx/2,H-3);
   let nearest=null;
-  for(const[ang,dist]of scanPts)if(!nearest||dist<nearest.d)nearest={ang,d:dist};
+  for(const[ang,dist] of scanPts)if(!nearest||dist<nearest.d)nearest={ang,d:dist};
   if(nearest){
-    const wp=localToWorld(nearest.ang,nearest.d),s=w2s(wp.x,wp.y);
+    const rad=(nearest.ang-90)*Math.PI/180;
+    const px=v.x+Math.cos(rad)*nearest.d/GRES*v.sc,py=v.y+Math.sin(rad)*nearest.d/GRES*v.sc;
     ctxM.strokeStyle='rgba(232,88,10,0.25)';ctxM.lineWidth=1;ctxM.setLineDash([2,4]);
-    ctxM.beginPath();ctxM.moveTo(robS.px,robS.py);ctxM.lineTo(s.px,s.py);ctxM.stroke();ctxM.setLineDash([]);
+    ctxM.beginPath();ctxM.moveTo(v.x,v.y);ctxM.lineTo(px,py);ctxM.stroke();ctxM.setLineDash([]);
     document.getElementById('s-near').innerHTML=(nearest.d/304.8).toFixed(1)+'<span class="unit">ft</span>';
     document.getElementById('s-near-dir').textContent=nearest.ang.toFixed(1)+'°  ·  '+(nearest.d/304.8).toFixed(1)+' ft';
     document.getElementById('h-near').textContent=(nearest.d/304.8).toFixed(1)+'ft';
@@ -312,7 +255,6 @@ function drawMap(){
   document.getElementById('st-mz').textContent=v.sc.toFixed(2)+'x';
   document.getElementById('m-info').textContent=mapScans+' scans · scroll=zoom · drag=pan';
 }
-
 let fpsCnt=0,fpsLast=performance.now();
 function loop(){
   drawMap();fpsCnt++;
@@ -322,7 +264,6 @@ function loop(){
 }
 requestAnimationFrame(loop);
 
-// ── Warmup ────────────────────────────────────────────────────────────────────
 let wuTotal=180;
 function showWarmup(total){wuTotal=total;document.getElementById('warmup-bar').classList.add('show');}
 function tickWarmup(remaining){
@@ -333,23 +274,11 @@ function tickWarmup(remaining){
 function finishWarmup(){document.getElementById('wu-fill').style.width='100%';document.getElementById('wu-label').textContent='Calibrating…';}
 function hideWarmup(){document.getElementById('warmup-bar').classList.remove('show');}
 
-// ── Calibration ───────────────────────────────────────────────────────────────
-let calR0={co:51234,no2:49650,nh3:52871},liveRs={co:null,no2:null,nh3:null};
-try{const s=localStorage.getItem('prom_r0');if(s)calR0={...calR0,...JSON.parse(s)};}catch(e){}
-function openCal(){document.getElementById('r0-co').value=Math.round(calR0.co);document.getElementById('r0-no2').value=Math.round(calR0.no2);document.getElementById('r0-nh3').value=Math.round(calR0.nh3);updateCalLive();document.getElementById('cal-overlay').classList.add('open');}
-function closeCal(){document.getElementById('cal-overlay').classList.remove('open');}
-function updateCalLive(){const fmt=v=>v!=null?Math.round(v).toLocaleString():'—';document.getElementById('cl-co').textContent=fmt(liveRs.co);document.getElementById('cl-no2').textContent=fmt(liveRs.no2);document.getElementById('cl-nh3').textContent=fmt(liveRs.nh3);}
-function useCurrentRs(){if(liveRs.co)document.getElementById('r0-co').value=Math.round(liveRs.co);if(liveRs.no2)document.getElementById('r0-no2').value=Math.round(liveRs.no2);if(liveRs.nh3)document.getElementById('r0-nh3').value=Math.round(liveRs.nh3);}
-function saveCal(){
-  const co=parseFloat(document.getElementById('r0-co').value),no2=parseFloat(document.getElementById('r0-no2').value),nh3=parseFloat(document.getElementById('r0-nh3').value);
-  if([co,no2,nh3].some(v=>isNaN(v)||v<=0)){alert('Enter valid positive values.');return;}
-  calR0={co,no2,nh3};try{localStorage.setItem('prom_r0',JSON.stringify(calR0));}catch(e){}closeCal();
-}
-
-// ── Gas ───────────────────────────────────────────────────────────────────────
 const THR={co:{c:9,d:35},no2:{c:.1,d:1},nh3:{c:25,d:50}};
 let gasMax={co:1,no2:.01,nh3:1},lastGas=[null,null,null];
-function setAllGasStatus(cls,lbl){['co','no2','nh3'].forEach(g=>{document.getElementById(g+'-s').className='gst '+cls;document.getElementById(g+'-s').textContent=lbl;});}
+function setAllGasStatus(cls,lbl){
+  ['co','no2','nh3'].forEach(g=>{document.getElementById(g+'-s').className='gst '+cls;document.getElementById(g+'-s').textContent=lbl;});
+}
 function glv(val,k){return val>=THR[k].d?'danger':val>=THR[k].c?'caution':'normal';}
 function updateGas(co,no2,nh3){
   if(lastGas[0]===co&&lastGas[1]===no2&&lastGas[2]===nh3)return;
@@ -359,24 +288,28 @@ function updateGas(co,no2,nh3){
   document.getElementById('co-v').innerHTML=co.toFixed(2)+'<span class="gc-unit">ppm</span>';
   document.getElementById('no2-v').innerHTML=no2.toFixed(4)+'<span class="gc-unit">ppm</span>';
   document.getElementById('nh3-v').innerHTML=nh3.toFixed(2)+'<span class="gc-unit">ppm</span>';
-  document.getElementById('co-f').style.width=pct(co,gasMax.co);document.getElementById('no2-f').style.width=pct(no2,gasMax.no2);document.getElementById('nh3-f').style.width=pct(nh3,gasMax.nh3);
+  document.getElementById('co-f').style.width=pct(co,gasMax.co);
+  document.getElementById('no2-f').style.width=pct(no2,gasMax.no2);
+  document.getElementById('nh3-f').style.width=pct(nh3,gasMax.nh3);
   const lv={co:glv(co,'co'),no2:glv(no2,'no2'),nh3:glv(nh3,'nh3')};
-  const lbl={normal:'Normal',caution:'Caution',danger:'Danger'},cls={normal:'s-n',caution:'s-c',danger:'s-d'};
-  for(const[g,l]of Object.entries(lv)){document.getElementById(g+'-s').className='gst '+cls[l];document.getElementById(g+'-s').textContent=lbl[l];}
+  const lbl={normal:'Normal',caution:'Caution',danger:'Danger'};
+  const cls={normal:'s-n',caution:'s-c',danger:'s-d'};
+  for(const[g,l] of Object.entries(lv)){document.getElementById(g+'-s').className='gst '+cls[l];document.getElementById(g+'-s').textContent=lbl[l];}
   const worst=Object.values(lv).includes('danger')?'danger':Object.values(lv).includes('caution')?'caution':'normal';
   const ban=document.getElementById('banner');
   if(worst==='normal'){ban.style.display='none';}
   else{ban.style.display='block';ban.style.background=worst==='danger'?'#1a0505':'#1a1000';ban.style.color=worst==='danger'?'#f87171':'#fb923c';ban.style.borderBottom=worst==='danger'?'1px solid #3d1010':'1px solid #3d2500';ban.textContent=worst==='danger'?'DANGER — hazardous gas detected':'CAUTION — elevated gas levels';}
 }
 
-// ── Parse ─────────────────────────────────────────────────────────────────────
 function parseLine(line){
+  line=line.trim();if(!line)return;
   if(line.startsWith('L:')){
-    const pts=line.slice(2).split(';').map(p=>{const[a,d]=p.split(',');let ang=parseFloat(a)%360;if(ang<0)ang+=360;return[ang,parseInt(d)];}).filter(([a,d])=>!isNaN(a)&&!isNaN(d)&&d>50&&d<12000);
+    const pts=line.slice(2).split(';').map(p=>{
+      const[a,d]=p.split(',');let ang=parseFloat(a)%360;if(ang<0)ang+=360;return[ang,parseInt(d)];
+    }).filter(([a,d])=>!isNaN(a)&&!isNaN(d)&&d>50&&d<12000);
     if(pts.length){
-      matchAndUpdatePose(pts);scanPts=pts;
-      for(const[a,d]of pts){const wp=localToWorld(a,d);updateGrid(wp.x,wp.y,pose.x,pose.y);}
-      prevScanWorld=pts.map(([a,d])=>localToWorld(a,d));
+      scanPts=pts;
+      for(const[a,d] of pts)updateGrid(a,d);
       mapScans++;wallDirty=true;
     }
   } else if(line.startsWith('G:')){
@@ -384,33 +317,32 @@ function parseLine(line){
     if(val.startsWith('warmup,')){showWarmup(parseInt(val.split(',')[1])||180);setAllGasStatus('s-w','Warming up');}
     else if(val.startsWith('countdown,')){tickWarmup(parseInt(val.split(',')[1])||0);}
     else if(val==='calibrating'){finishWarmup();setAllGasStatus('s-w','Calibrating');}
-    else if(val.startsWith('ready,')){hideWarmup();const[,co,no2,nh3]=val.split(',');calR0={co:parseFloat(co)||calR0.co,no2:parseFloat(no2)||calR0.no2,nh3:parseFloat(nh3)||calR0.nh3};setAllGasStatus('s-n','Ready');}
-    else if(val.startsWith('RS:')){const[co,no2,nh3]=val.slice(3).split(',').map(Number);if(!isNaN(co)){liveRs={co,no2,nh3};updateCalLive();}}
-    else{const[co,no2,nh3]=val.split(',').map(Number);if(!isNaN(co))updateGas(co,no2,nh3);}
+    else if(val.startsWith('ready,')){hideWarmup();setAllGasStatus('s-n','Ready');}
+    else if(val.startsWith('RS:')){}
+    else{const[co,no2,nh3]=val.split(',').map(Number);if(!isNaN(co)&&!isNaN(no2)&&!isNaN(nh3))updateGas(co,no2,nh3);}
   }
 }
 
-// ── WebSocket auto-connect to Pico AP ─────────────────────────────────────────
-// Connect to Pico WS — works whether loaded from GitHub (https) or Pico (http)
-const PICO_WS = location.protocol === 'https:'
-  ? 'ws://192.168.4.1:8765'   // loaded from GitHub, browser may block — see below
-  : 'ws://192.168.4.1:8765';  // loaded via Pico redirect, always works
-
-let ws=null;
-function setStatus(state,msg){
-  const b=document.getElementById('badge'),s=document.getElementById('ws-status');
-  if(state==='live'){b.textContent='LIVE';b.className='pill p-live';s.textContent='connected to Prometheus';}
-  else if(state==='wait'){b.textContent='RECONNECTING';b.className='pill p-wait';s.textContent=msg||'reconnecting…';}
-  else{b.textContent='OFFLINE';b.className='pill p-off';s.textContent=msg||'connect to Prometheus WiFi';}
+let ws=null,linebuf='';
+function setStatus(s){
+  const b=document.getElementById('badge');
+  if(s==='live'){b.textContent='LIVE';b.className='pill p-live';}
+  else if(s==='wait'){b.textContent='RECONNECTING';b.className='pill p-wait';}
+  else{b.textContent='OFFLINE';b.className='pill p-off';}
 }
-function connectWS(){
-  ws=new WebSocket(PICO_WS);
-  ws.onopen=()=>setStatus('live');
-  ws.onmessage=e=>parseLine(e.data.trim());
-  ws.onclose=()=>{setStatus('wait','reconnecting — make sure you are on Prometheus WiFi');setTimeout(connectWS,3000);}
-  ws.onerror=()=>{setStatus('off','not reachable — connect to Prometheus WiFi first');}
+function connect(){
+  ws=new WebSocket('ws://192.168.4.1:80');
+  ws.onopen=function(){setStatus('live');linebuf='';};
+  ws.onmessage=function(e){
+    linebuf+=e.data;
+    const lines=linebuf.split('\n');
+    linebuf=lines.pop();
+    for(const l of lines)parseLine(l);
+  };
+  ws.onclose=function(){setStatus('wait');setTimeout(connect,3000);};
+  ws.onerror=function(){setStatus('off');};
 }
-connectWS();
+connect();
 </script>
 </body>
 </html>
